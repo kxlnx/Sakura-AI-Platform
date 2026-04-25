@@ -1,0 +1,9 @@
+---
+description: AI CodeReview 提示词规则
+---
+
+# AI CodeReview 规则
+
+请使用以下规则对代码进行审查：
+
+@import "./src/main/resources/prompts/alc-review-prompt.md"

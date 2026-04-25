@@ -1,0 +1,78 @@
+diff --git a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java
+index 1234567..abcdefg 100644
+--- a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java
++++ b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java
+@@ -22,8 +22,10 @@ public class LongTermMemoryReader {
+     private final VectorStore vectorStore;
+
+     @Value("${memory.hybrid.search.enabled:false}")
+     private boolean useHybridSearch;
+
+     @Autowired(required = false)
+     private com.yupi.yuaiagent.memory.service.MilvusHybridSearchService hybridSearchService;
++
++    private static final int MAX_RECALL_SIZE = 100;
+@@ -78,12 +80,12 @@ public class LongTermMemoryReader {
+         try {
+             Filter.Expression userFilter = new FilterExpressionBuilder().eq("user_id", userId).build();
+             SearchRequest searchRequest = SearchRequest.builder()
+                     .query(query)
+-                    .topK(topK * 10)
++                    .topK(Math.min(topK * 10, MAX_RECALL_SIZE))
+                     .filterExpression(userFilter)
+                     .build();
+
+             List<Document> results = vectorStore.similaritySearch(searchRequest);
+-            log.info("[长期记忆] 语义搜索召回 {} 条", results.size());
++            log.info("[长期记忆] 语义搜索召回 {} 条, userId={}", results.size(), userId);
+             return results.stream().limit(topK).collect(Collectors.toList());
+         } catch (Exception e) {
+             log.error("[长期记忆] 语义搜索失败", e);
+@@ -120,7 +122,7 @@ public class LongTermMemoryReader {
+      * 融合语义搜索和关键词搜索的结果
+      */
+     private List<Document> fuseResults(List<Document> semanticResults,
+-                                     List<Document> keywordResults,
+-                                     int topK) {
++                                      List<Document> keywordResults,
++                                      int topK) {
+         Map<String, Document> fusedMap = new LinkedHashMap<>();
+
+         // 关键词匹配优先
+diff --git a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java
+index 9876543..mnopqrs 100644
+--- a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java
++++ b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java
+@@ -80,8 +80,8 @@ public class LongTermMemoryWriter {
+     private boolean isSimilarMemoryExists(String userId, String fact) {
+         try {
+             Filter.Expression userFilter = new FilterExpressionBuilder().eq("user_id", userId).build();
+             SearchRequest searchRequest = SearchRequest.builder()
+                     .query(fact)
+-                    .topK(5)
++                    .topK(3)
+                     .filterExpression(userFilter)
+                     .build();
+
+             List<Document> results = vectorStore.similaritySearch(searchRequest);
+-            log.debug("[长期记忆] 发现相似记忆: distance={}, content={}", distance, doc.getText());
++            log.debug("[长期记忆] 发现相似记忆: distance={}, content={}, userId={}", distance, doc.getText(), userId);
+         } catch (Exception e) {
+             log.warn("[长期记忆] 检查相似记忆时出错: {}", e.getMessage());
+         }
+diff --git a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java b/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
+index abcdef1..ghijkl2 100644
+--- a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
++++ b/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
+@@ -138,7 +138,7 @@ public class LoveApp {
+         return executeWithLock(chatId, () -> {
+             String userId = UserContext.getUserId();
+             String memoryKey = userId + ":" + chatId;
+-            ChatResponse chatResponse = chatClient
++            ChatResponse chatResponse = chatClient
+                     .prompt()
+                     .user(message)
+                     .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, memoryKey))
+                     .advisors(new BannedWordAdvisor())
+                     .call()
+                     .chatResponse();
