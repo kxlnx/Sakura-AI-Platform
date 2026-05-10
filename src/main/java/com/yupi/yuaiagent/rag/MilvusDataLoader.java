@@ -37,28 +37,38 @@ public class MilvusDataLoader implements ApplicationRunner {
         log.info("=========================================");
         log.info("[Milvus RAG] 开始执行工业级数据入库流水线...");
 
-        List<Document> existingDocs = vectorStore.similaritySearch(SearchRequest.builder()
-                .query("check_existence")
-                .topK(1)
-                .build());
-        if (!existingDocs.isEmpty()) {
-            log.info("[Milvus RAG] 检测到向量数据库中已有数据，跳过初始化...");
-            log.info("=========================================");
-            return;
+        try {
+            List<Document> existingDocs = vectorStore.similaritySearch(SearchRequest.builder()
+                    .query("check_existence")
+                    .topK(1)
+                    .build());
+            if (!existingDocs.isEmpty()) {
+                log.info("[Milvus RAG] 检测到向量数据库中已有数据，跳过初始化...");
+                log.info("=========================================");
+                return;
+            }
+        } catch (Exception e) {
+            log.info("[Milvus RAG] 集合尚未创建或无法访问，继续初始化流程...");
         }
 
         // 1. 加载本地 Markdown 原始文档
+        log.info("[Milvus RAG] ① 加载文档...");
         List<Document> documentList = loveAppDocumentLoader.loadMarkdowns();
+        log.info("[Milvus RAG] ① 加载完成，共 {} 篇文档", documentList.size());
 
-        // 2. 物理切分 (Chunking)
+        // 2. 语义分块（调 Embedding API，可能需要 1-2 分钟）
+        log.info("[Milvus RAG] ② 语义分块中...");
         List<Document> splitDocuments = semanticTextSplitter.split(documentList);
+        log.info("[Milvus RAG] ② 分块完成，共 {} 个切片", splitDocuments.size());
 
-        // 3. AI 语义增强 (提取关键词注入 Metadata)
+        // 3. LLM 关键词提取（每个切片调一次 LLM，196 片约需 3-5 分钟）
+        log.info("[Milvus RAG] ③ 关键词提取中（较慢，请等待）...");
         List<Document> enrichedDocuments = myKeywordEnricher.enrichDocuments(splitDocuments);
+        log.info("[Milvus RAG] ③ 关键词提取完成");
 
-        // 4. 分批批量写入 Milvus（应对大模型 API 单次限制）
-        int batchSize = 20; // 阿里云限制最大25，我们设为20更安全
-        log.info("[Milvus RAG] 准备入库，总切片数：{}，每批次 {} 条", enrichedDocuments.size(), batchSize);
+        // 4. 分批批量写入 Milvus
+        int batchSize = 20;
+        log.info("[Milvus RAG] ④ 开始入库，总切片数：{}，每批次 {} 条", enrichedDocuments.size(), batchSize);
 
         for (int i = 0; i < enrichedDocuments.size(); i += batchSize) {
             // 计算当前批次的结束位置

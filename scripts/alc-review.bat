@@ -19,17 +19,6 @@ exit /b 1
 :found_git
 cd /d "%PROJECT_DIR%"
 
-set BASE_BRANCH=master
-set SCOPE=staged
-
-if "%~1"=="all" (
-    set SCOPE=all
-    set BASE_BRANCH=master
-) else if not "%~1"=="" (
-    set SCOPE=all
-    set BASE_BRANCH=%~1
-)
-
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
 set TIMESTAMP=%dt:~0,8%_%dt:~8,6%
 set DIFF_FILE=%PROJECT_DIR%scripts\code_review_%TIMESTAMP%.diff
@@ -40,16 +29,12 @@ echo.
 
 echo Generating Diff file...
 
-if "%SCOPE%"=="staged" (
-    echo Generating staged changes diff...
-    git diff --cached > "%DIFF_FILE%"
-) else (
-    echo Generating diff against %BASE_BRANCH% branch...
-    git diff %BASE_BRANCH%..HEAD > "%DIFF_FILE%"
-)
+git diff HEAD > "%DIFF_FILE%"
 
 for %%A in ("%DIFF_FILE%") do if %%~zA==0 (
     echo Error: No code changes found
+    echo.
+    echo Tip: Make changes to files first, or use 'git add' to stage changes
     del "%DIFF_FILE%"
     exit /b 1
 )

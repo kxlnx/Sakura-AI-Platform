@@ -9,11 +9,17 @@ import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 恋爱大师应用文档加载器
+ * 文档加载器：从 classpath:document/*.md 加载 Markdown 并注入元数据
+ * <p>
+ * Metadata 三层加工链路：
+ * ① 本类：注入 filename + title（从 H1 提取）
+ * ② SemanticTextSplitter：透传，每个 chunk 继承父文档 metadata
+ * ③ MyKeywordEnricher：LLM 提取关键词注入 keywords 字段
  */
 @Component
 @Slf4j
@@ -25,32 +31,43 @@ public class LoveAppDocumentLoader {
         this.resourcePatternResolver = resourcePatternResolver;
     }
 
-    /**
-     * 加载多篇 Markdown 文档
-     * @return
-     */
     public List<Document> loadMarkdowns() {
-        // 添加元数据 filename 和 status
         List<Document> allDocuments = new ArrayList<>();
         try {
             Resource[] resources = resourcePatternResolver.getResources("classpath:document/*.md");
             for (Resource resource : resources) {
                 String filename = resource.getFilename();
-                // 提取文档倒数第 3 和第 2 个字作为标签
-                String status = filename.substring(filename.length() - 6, filename.length() - 4);
+                String rawContent = resource.getContentAsString(StandardCharsets.UTF_8);
+                String title = extractTitle(rawContent);
+
+                log.info("[文档加载] 文件: {}, 标题: {}", filename, title);
+
                 MarkdownDocumentReaderConfig config = MarkdownDocumentReaderConfig.builder()
                         .withHorizontalRuleCreateDocument(true)
                         .withIncludeCodeBlock(false)
                         .withIncludeBlockquote(false)
                         .withAdditionalMetadata("filename", filename)
-                        .withAdditionalMetadata("status", status)
+                        .withAdditionalMetadata("title", title)
                         .build();
-                MarkdownDocumentReader markdownDocumentReader = new MarkdownDocumentReader(resource, config);
-                allDocuments.addAll(markdownDocumentReader.get());
+                MarkdownDocumentReader reader = new MarkdownDocumentReader(resource, config);
+                allDocuments.addAll(reader.get());
             }
         } catch (IOException e) {
-           log.error("Markdown 文档加载失败", e);
+            log.error("Markdown 文档加载失败", e);
         }
         return allDocuments;
+    }
+
+    /**
+     * 从 Markdown 正文提取 H1 标题
+     * "# 上杉绘梨衣 · 角色设定" → "上杉绘梨衣·角色设定"
+     */
+    private String extractTitle(String markdown) {
+        return markdown.lines()
+                .map(String::trim)
+                .filter(line -> line.startsWith("#") && !line.startsWith("##"))
+                .findFirst()
+                .map(line -> line.replaceAll("^#+\\s*", "").replaceAll("\\s+", ""))
+                .orElse("未分类");
     }
 }

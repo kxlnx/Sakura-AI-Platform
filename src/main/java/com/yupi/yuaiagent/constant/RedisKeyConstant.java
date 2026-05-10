@@ -8,7 +8,7 @@ public interface RedisKeyConstant {
     /**
      * 业务根前缀（手动锁定项目名）
      */
-    String ROOT = "yu_ai";
+    String ROOT = "sakura";
 
     /**
      * 模块名
@@ -22,14 +22,14 @@ public interface RedisKeyConstant {
     String TYPE_LOCK = "lock";
 
     /**
-     * 拼接方法：yu_ai:chat:memory:{id}
+     * 拼接方法：sakura:chat:memory:{id}
      */
     static String getMemoryKey(String id) {
         return String.join(":", ROOT, MODULE_CHAT, TYPE_MEMORY, id);
     }
 
     /**
-     * 拼接方法：yu_ai:chat:lock:{id}
+     * 拼接方法：sakura:chat:lock:{id}
      */
     static String getLockKey(String id) {
         return String.join(":", ROOT, MODULE_CHAT, TYPE_LOCK, id);

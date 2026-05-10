@@ -1,0 +1,1 @@
+@import "./src/main/resources/prompts/alc-review-prompt.md"

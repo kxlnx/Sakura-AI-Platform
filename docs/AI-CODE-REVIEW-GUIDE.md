@@ -1,129 +1,234 @@
-# AI CodeReview 使用指南
+# AI CodeReview 完整使用指南（中文版）
 
-## 概述
+> 适用于：Trae IDE（中文版）、Cursor IDE
 
-本工具提供了一套标准化的AI CodeReview流程，通过精心设计的提示词模板，让AI能够：
+---
 
-- **全面评审**：覆盖代码质量、安全性、性能、并发、业务逻辑等多个维度
-- **分类清晰**：将问题分为 Critical（必须修复）、Warning（建议修复）、Info（优化建议）三个级别
-- **格式统一**：输出标准化的评审报告，便于团队使用和跟踪
+## 一、项目文件说明
 
-## 文件说明
+你项目的文件清单：
 
 ```
-.
-├── .cursor/rules/
-│   └── alc-review.mdc              # Cursor Project Rules 配置文件
+sakura-agent-master/
+├── .cursor/
+│   └── rules/
+│       └── alc-review.mdc              ← 规则文件
 ├── scripts/
-│   ├── alc-review.sh               # Linux/Mac 自动脚本
-│   └── alc-review.bat              # Windows 自动脚本
-└── src/main/resources/prompts/
-    └── alc-review-prompt.md        # AI CodeReview 提示词模板
+│   ├── alc-review.bat                  ← 【重要】自动生成Diff脚本
+│   ├── alc-review.sh                   ← Mac/Linux脚本
+│   └── init-git.bat                   ← Git初始化脚本
+├── src/main/resources/prompts/
+│   └── alc-review-prompt.md            ← 【重要】AI提示词模板
+└── docs/
+    └── AI-CODE-REVIEW-GUIDE.md         ← 本教程
 ```
 
-## 使用方式
+---
 
-### 方式一：自动脚本（推荐）
+## 二、第一步：初始化Git仓库（仅需执行一次）
 
-#### Windows
+在项目根目录空白处，**按住 Shift + 右键**，选择"在此处打开 PowerShell 窗口"
 
-```cmd
-cd scripts
-alc-review.bat              # 生成暂存区变更
-alc-review.bat all         # 生成所有未合并到master的变更
-alc-review.bat dev         # 基于dev分支生成diff
+运行：
+```powershell
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M master
 ```
 
-#### Linux / Mac
+---
 
-```bash
-chmod +x scripts/alc-review.sh
-./scripts/alc-review.sh              # 生成暂存区变更
-./scripts/alc-review.sh --all       # 生成所有未合并到master的变更
-./scripts/alc-review.sh --base dev  # 基于dev分支生成diff
-```
+## 三、第二步：在 Trae 中配置规则（仅需执行一次）
 
-### 方式二：手动复制diff
+### 3.1 打开设置
 
-1. **生成diff文件**
-   ```bash
-   git diff master..HEAD > code_review.diff
-   ```
+1. 点击 Trae 左下角 **设置图标**（齿轮图标）
+2. 或者按 **Ctrl + 逗号**（Ctrl + ,）
 
-2. **在Cursor中导入规则**
-   - 打开 Cursor Settings > Project > Rules
-   - 添加新规则，选择 `.cursor/rules/alc-review.mdc`
+### 3.2 找到项目规则
 
-3. **进行CodeReview**
-   - 在Cursor中新建对话
-   - 输入：`使用 @{alc-review} 规则对以下diff进行CodeReview`
-   - 粘贴diff内容
+1. 在搜索框中输入 **"规则"**
+2. 点击 **"项目"**
+3. 点击 **"规则"**
 
-## 评审分类说明
+### 3.3 添加规则
 
-### Critical（必须修复）
-- 安全漏洞
-- 严重性能问题
-- 数据一致性问题
-- 线程安全问题
-- 空指针/崩溃风险
-
-### Warning（建议修复）
-- 代码质量问题
-- 潜在性能隐患
-- 可维护性问题
-- 日志不规范
-
-### Info（优化建议）
-- 代码风格改进
-- 命名优化
-- 简化逻辑
-
-## 输出报告示例
+1. 点击 **"添加规则"**
+2. 规则名称填写：`alc-review`
+3. 规则内容填写：
 
 ```markdown
-# AI CodeReview 报告
-
-## 评审概览
-- **评审文件数**：3
-- **Critical 问题数**：1
-- **Warning 问题数**：2
-- **Info 问题数**：1
-
----
-
-## Critical 问题（必须修复）
-
-| # | 文件路径 | 问题描述 | 影响 | 建议修复方案 |
-|---|---------|---------|------|------------|
-| 1 | UserService.java:45 | SQL注入风险 | 攻击者可构造恶意输入 | 使用预编译SQL或参数化查询 |
-
----
-
-## Warning 问题（建议修复）
-
-| # | 文件路径 | 问题描述 | 严重程度 | 建议修复方案 |
-|---|---------|---------|---------|------------|
-| 1 | OrderService.java:78 | N+1查询问题 | 数据库压力过大 | 使用批量查询或JOIN |
-
----
-
-## Info 优化建议
-
-| # | 文件路径 | 当前代码 | 优化建议 |
-|---|---------|---------|---------|
-| 1 | Utils.java:23 | getTmp | getTemperature 更清晰 |
-
----
-
-## 总结
-1. 重点关注UserService.sqlInject()方法的参数校验
-2. OrderService建议使用批量查询优化性能
+@import "./src/main/resources/prompts/python_rule.md"
 ```
 
-## 最佳实践
+4. 点击 **"保存"**
 
-1. **提交前Review**：在提交代码前运行一次AI CodeReview
-2. **优先级处理**：先处理Critical问题，再处理Warning，最后处理Info
-3. **结合人工Review**：AI Review不能替代人工评审，仅作为辅助工具
-4. **持续优化**：根据团队实际需求调整提示词模板
+---
+
+## 四、第三步：修改代码
+
+用 Trae 打开项目，随意改一个文件，比如添加一行注释
+
+---
+
+## 五、第四步：生成Diff文件
+
+### 5.1 打开终端
+
+在项目根目录，**按住 Shift + 右键**，选择"在此处打开 PowerShell 窗口"
+
+### 5.2 运行脚本
+
+```powershell
+.\scripts\alc-review.bat
+```
+
+脚本运行后会自动输出diff内容和提示词
+
+---
+
+## 六、第五步：在 Trae 中触发规则进行CodeReview
+
+### 6.1 新建对话
+
+在 Trae 中新建一个聊天会话（按 `Ctrl + N`）
+
+### 6.2 输入触发规则（重要！！！）
+
+**在输入框中输入以下内容：**
+
+```
+使用 @{alc-review} 规则对以下diff进行CodeReview
+```
+
+### 6.3 粘贴Diff内容
+
+1. 鼠标选中终端窗口
+2. 按 `Ctrl + A` 全选
+3. 按 `Ctrl + C` 复制
+4. 回到 Trae 输入框，按 `Ctrl + V` 粘贴
+
+### 6.4 发送
+
+按 **回车键** 发送
+
+### 6.5 等待AI输出评审报告
+
+AI会按照规则输出格式化的CodeReview报告！
+
+---
+
+## 七、完整操作流程图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    AI CodeReview 操作流程                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  第一步：修改代码         用 Trae 打开项目，随意改一个文件           │
+│        │                                                       │
+│        ▼                                                       │
+│  第二步：生成 Diff      终端运行 .\scripts\alc-review.bat       │
+│        │                                                       │
+│        ▼                                                       │
+│  第三步：全选复制       终端按 Ctrl+A 全选，Ctrl+C 复制           │
+│        │                                                       │
+│        ▼                                                       │
+│  第四步：粘贴到 Trae   Trae按 Ctrl+V 粘贴                       │
+│        │                                                       │
+│        ▼                                                       │
+│  第五步：发送          输入 "使用 @{alc-review} 规则..." + 发送  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 八、关键：如何在Trae中触发规则
+
+### 触发语法
+
+```
+使用 @{alc-review} 规则对以下diff进行CodeReview
+```
+
+### 完整输入示例
+
+```
+使用 @{alc-review} 规则对以下diff进行CodeReview
+
+diff --git a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java b/src/main/java/...
+index abc123..def456 100644
+--- a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
++++ b/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
+@@ -22,6 +22,7 @@
++// 我是测试注释
+```
+
+### 示意图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Trae 对话窗口                                              │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                                                              │
+│  用户输入:                                                   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 使用 @{alc-review} 规则对以下diff进行CodeReview        │   │
+│  │                                                      │   │
+│  │ diff --git a/src/main/java/...                       │   │
+│  │ index abc123..def456 100644                         │   │
+│  │ ...                                                  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│                                              [发送按钮]       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 九、快速参考
+
+```powershell
+# 1. 修改代码后，终端运行：
+.\scripts\alc-review.bat
+
+# 2. Trae 新建对话，输入：
+使用 @{alc-review} 规则对以下diff进行CodeReview
+
+# 3. Ctrl+A 全选终端内容，Ctrl+C 复制，Ctrl+V 粘贴到 Trae
+
+# 4. 按回车发送
+```
+
+---
+
+## 十、常见问题
+
+### Q1: @{alc-review} 不起作用
+- 确保规则名称是 `alc-review`，不是其他名字
+- 确保规则内容是 `@import "./src/main/resources/prompts/alc-review-prompt.md"`
+
+### Q2: Diff 文件为空
+- 确保已初始化 Git 仓库
+- 确保已修改文件但还没提交
+
+### Q3: 找不到脚本
+- 在终端中进入项目根目录：`cd G:\新建文件夹\sakura-agent-master`
+- 然后运行：`.\scripts\alc-review.bat`
+
+---
+
+## 十一、文件位置汇总
+
+| 文件 | 路径 |
+|-----|------|
+| 详细教程 | `docs/AI-CODE-REVIEW-GUIDE.md` |
+| AI提示词 | `src/main/resources/prompts/alc-review-prompt.md` |
+| 规则文件 | `.cursor/rules/alc-review.mdc` |
+| Windows脚本 | `scripts/alc-review.bat` |
+
+---
+
+**现在你可以在 Trae 中配置并使用了！**

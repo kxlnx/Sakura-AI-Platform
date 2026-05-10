@@ -36,7 +36,7 @@ public class RedisListChatMemory implements ChatMemory {
     @Resource
     private ObjectMapper objectMapper;
 
-    @Value("${yu-ai.memory.safe-limit:100}")
+    @Value("${sakura.memory.safe-limit:100}")
     private int safeLimit;
 
     private static final String MEMORY_KEY_PREFIX = "chat:memory:";
@@ -46,10 +46,18 @@ public class RedisListChatMemory implements ChatMemory {
     @Override
     public void add(String conversationId, List<Message> newMessages) {
         String redisKey = buildRedisKey(conversationId);
+        
+        log.info("[短期记忆-写] conversationId={}, redisKey={}, 消息数量={}", conversationId, redisKey, newMessages.size());
+        for (int i = 0; i < newMessages.size(); i++) {
+            Message msg = newMessages.get(i);
+            log.info("[短期记忆-写] 消息{}: {} = {}", i, msg.getMessageType(), msg.getText());
+        }
 
         String roundJson = serializeRound(newMessages);
         stringRedisTemplate.opsForList().rightPush(redisKey, roundJson);
         stringRedisTemplate.expire(redisKey, 7, TimeUnit.DAYS);
+        
+        log.info("[短期记忆-写] Redis 写入成功, key={}", redisKey);
 
         checkAndCompress(redisKey);
     }
@@ -57,11 +65,16 @@ public class RedisListChatMemory implements ChatMemory {
     @Override
     public List<Message> get(String conversationId) {
         String redisKey = buildRedisKey(conversationId);
+        
+        log.info("[短期记忆-读] conversationId={}, redisKey={}", conversationId, redisKey);
 
         List<String> rawRounds = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
         if (rawRounds == null || rawRounds.isEmpty()) {
+            log.info("[短期记忆-读] Redis 中无历史数据");
             return new ArrayList<>();
         }
+        
+        log.info("[短期记忆-读] Redis 召回 {} 轮对话", rawRounds.size());
 
         List<Message> allMessages = new ArrayList<>();
         for (String rawRound : rawRounds) {
@@ -69,7 +82,15 @@ public class RedisListChatMemory implements ChatMemory {
         }
 
         int fromIndex = Math.max(0, allMessages.size() - safeLimit);
-        return allMessages.subList(fromIndex, allMessages.size());
+        List<Message> result = allMessages.subList(fromIndex, allMessages.size());
+        
+        log.info("[短期记忆-读] 返回 {} 条消息（总消息数={}, safeLimit={}）", result.size(), allMessages.size(), safeLimit);
+        for (int i = 0; i < result.size(); i++) {
+            Message msg = result.get(i);
+            log.info("[短期记忆-读] 消息{}: {} = {}", i, msg.getMessageType(), msg.getText());
+        }
+        
+        return result;
     }
 
     @Override
@@ -79,6 +100,7 @@ public class RedisListChatMemory implements ChatMemory {
     }
 
     private String buildRedisKey(String conversationId) {
+        // conversationId 已经是 userId:chatId 的格式，直接拼接即可
         return MEMORY_KEY_PREFIX + conversationId;
     }
 

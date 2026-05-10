@@ -42,7 +42,7 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public int getOrder() {
-        return 0;
+        return -100; // 必须在 RAG Advisor 之前执行，否则 RAG 的空上下文兜底会替换用户消息
     }
 
     @Override
@@ -78,8 +78,16 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
             List<String> memoryContents = handleMemoryRead(userId, userMessage);
             if (!memoryContents.isEmpty()) {
                 log.info("[长期记忆] 召回 {} 条记忆", memoryContents.size());
-                // 暂时注释掉记忆注入逻辑，避免API兼容性问题
-                // 核心问题是记忆隔离，已经通过userId过滤解决
+                // 将长期记忆注入到系统消息中
+                String memorySystemMessage = buildMemorySystemMessage(memoryContents);
+                SystemMessage systemMessage = new SystemMessage(memorySystemMessage);
+                
+                // 创建新的Prompt，将系统消息添加到前面
+                List<Message> messages = new ArrayList<>(request.prompt().getInstructions());
+                messages.add(0, systemMessage); // 在最前面添加记忆系统消息
+                org.springframework.ai.chat.prompt.Prompt newPrompt = new org.springframework.ai.chat.prompt.Prompt(messages, request.prompt().getOptions());
+                
+                return new ChatClientRequest(newPrompt, request.context());
             }
 
         } catch (Exception e) {
@@ -93,13 +101,25 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
      * 从请求中提取用户ID
      */
     private String extractUserId(ChatClientRequest request) {
+        // 方案1：优先从 UserContext 获取（测试环境或登录后的用户）
+        String userIdFromContext = com.yupi.yuaiagent.context.UserContext.getUserId();
+        if (userIdFromContext != null && !"anonymous".equals(userIdFromContext)) {
+            log.debug("[长期记忆] 从 UserContext 获取 userId: {}", userIdFromContext);
+            return userIdFromContext;
+        }
+        
+        // 方案2：从 request context 中获取
         Map<String, Object> params = request.context();
         if (params != null && params.containsKey(USER_ID_PARAM)) {
             Object userId = params.get(USER_ID_PARAM);
             if (userId != null && !userId.toString().isEmpty()) {
+                log.debug("[长期记忆] 从 request context 获取 userId: {}", userId);
                 return userId.toString();
             }
         }
+        
+        // 方案3：默认值
+        log.warn("[长期记忆] 未找到 userId，使用默认值 default_user");
         return "default_user";
     }
 
@@ -143,13 +163,15 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
      * 判断是否应该提取隐式记忆
      */
     private boolean shouldExtractImplicitMemory(String message) {
-        // 简单的启发式判断：消息中包含个人信息
-        String[] keywords = {"我是", "我的", "我喜欢", "我不喜欢", "我的工作", "我的名字"};
+        String[] keywords = {"我是", "我叫", "我的", "我在", "我喜欢", "我不喜欢",
+                              "我住在", "我今年", "我从事", "我的工作", "我的名字", "我是一名"};
         for (String keyword : keywords) {
             if (message.contains(keyword)) {
+                log.info("[长期记忆] 隐式提取触发！关键词={}, 消息={}", keyword, message);
                 return true;
             }
         }
+        log.debug("[长期记忆] 隐式提取未触发，消息={}", message);
         return false;
     }
 
@@ -184,12 +206,12 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
      */
     private String buildMemorySystemMessage(List<String> memoryContents) {
         StringBuilder sb = new StringBuilder();
-        sb.append("【用户长期记忆】\n");
-        sb.append("以下是你之前了解到的关于该用户的重要信息：\n");
+        sb.append("【小本本上关于哥哥的记录】\n");
+        sb.append("之前和哥哥聊天时，你在小本本上记下了这些：\n");
         for (int i = 0; i < memoryContents.size(); i++) {
             sb.append((i + 1)).append(". ").append(memoryContents.get(i)).append("\n");
         }
-        sb.append("\n请根据以上记忆信息，结合当前对话内容，给出更个性化的回复。");
+        sb.append("\n结合这些记忆，用你平时和哥哥相处的方式回应他。");
         return sb.toString();
     }
 }

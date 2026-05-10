@@ -11,7 +11,7 @@ echo Adding files...
 git add .
 
 echo Creating initial commit...
-git commit -m "Initial commit: yu-ai-agent project"
+git commit -m "Initial commit: sakura-agent project"
 
 git branch -M master
 

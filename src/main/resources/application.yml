@@ -1,13 +1,13 @@
 spring:
   application:
-    name: yu-ai-agent
+    name: sakura-agent
   profiles:
     active: local
   data:
     redis:
       host: 127.0.0.1      # Redis 服务器地址 (本地为 127.0.0.1)
       port: 6379           # Redis 端口号 (默认 6379)
-      password:            # Redis 密码（无密码留空）
+#      password:            # Redis 密码（无密码留空）
       database: 0          # 默认使用 0 号库
       timeout: 5000ms      # 连接超时时间
       lettuce:
@@ -21,7 +21,7 @@ spring:
 #    username: Action_Squad
 #    password: Zx777111!
 #    driver-class-name: org.postgresql.Driver
-    url: jdbc:mysql://127.0.0.1:3306/yu_ai_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://127.0.0.1:3306/sakura_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -32,6 +32,8 @@ spring:
       chat:
         options:
           model: qwen-plus
+        # 添加超时配置（单位：秒）
+        timeout: 60s
 # 临时注释掉，便于大家开发调试和部署（实际需要启动 MCP 服务）
 #    mcp:
 #      client:
@@ -65,7 +67,7 @@ redisson:
   nettyThreads: 32
   single-server-config:
     address: "redis://127.0.0.1:6379"
-    password:              # 明确设置为空，无密码认证
+#    password:              # 明确设置为空，无密码认证
     database: 0
     connection-minimum-idle-size: 5
     connection-pool-size: 10
@@ -82,10 +84,13 @@ mybatis-plus:
       logic-delete-value: 1 # 逻辑已删除的值
       logic-not-delete-value: 0 # 逻辑未删除的值
 # 在最外层或自定义一个节点
-yu-ai:
+sakura:
   memory:
     # 数据库拉取历史消息的安全上限
     safe-limit: 20
+  # 向量库清理开关：设为 true 后启动一次清理旧数据，然后改回 false
+  vectorstore:
+    clear-on-startup: false
 
 server:
   port: 8123
@@ -116,3 +121,6 @@ search-api:
 logging:
   level:
     org.springframework.ai: DEBUG
+    # 开启 Redis 操作日志，观察短期记忆的读写
+    io.lettuce.core: DEBUG
+    org.springframework.data.redis: DEBUG

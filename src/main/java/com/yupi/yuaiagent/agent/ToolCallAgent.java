@@ -41,6 +41,10 @@ public class ToolCallAgent extends ReActAgent {
     // 禁用 Spring AI 内置的工具调用机制，自己维护选项和消息上下文
     private final ChatOptions chatOptions;
 
+    // 对话相关参数
+    private String chatId;
+    private String userId;
+
     public ToolCallAgent(ToolCallback[] availableTools) {
         super();
         this.availableTools = availableTools;
@@ -49,6 +53,16 @@ public class ToolCallAgent extends ReActAgent {
         this.chatOptions = DashScopeChatOptions.builder()
                 .withInternalToolExecutionEnabled(false)
                 .build();
+    }
+
+    /**
+     * 设置对话参数
+     * @param chatId 对话ID
+     * @param userId 用户ID
+     */
+    public void setConversationParams(String chatId, String userId) {
+        this.chatId = chatId;
+        this.userId = userId;
     }
 
     /**
@@ -73,9 +87,19 @@ public class ToolCallAgent extends ReActAgent {
         List<Message> messageList = getMessageList();
         Prompt prompt = new Prompt(messageList, this.chatOptions);
         try {
-            ChatResponse chatResponse = getChatClient().prompt(prompt)
+            // 构建聊天客户端调用，添加记忆和RAG支持
+            var chatClientCall = getChatClient().prompt(prompt)
                     .system(getSystemPrompt())
-                    .tools(availableTools)
+                    .toolCallbacks(availableTools);  // ✅ 修复：使用 toolCallbacks() 而非 tools()
+
+            // 添加对话记忆参数
+            if (StrUtil.isNotBlank(chatId) && StrUtil.isNotBlank(userId)) {
+                String memoryKey = userId + ":" + chatId;
+                chatClientCall = chatClientCall.advisors(spec -> spec.param("conversationId", memoryKey));
+                chatClientCall = chatClientCall.advisors(spec -> spec.param("userId", userId));
+            }
+
+            ChatResponse chatResponse = chatClientCall
                     .call()
                     .chatResponse();
 

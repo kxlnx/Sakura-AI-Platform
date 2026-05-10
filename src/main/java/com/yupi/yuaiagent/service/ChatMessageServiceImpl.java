@@ -13,7 +13,7 @@ import java.util.List;
  * @description 针对表【chat_message(聊天消息表)】的数据库操作Service实现
  * @createDate 2025-04-30 19:56:23
  */
-@Service
+//@Service  // 当前使用 Redis 存储，MySQL 未启用
 public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatMessage>
         implements ChatMessageService{
 

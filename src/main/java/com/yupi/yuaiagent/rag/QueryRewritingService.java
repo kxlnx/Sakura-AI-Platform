@@ -1,12 +1,16 @@
 package com.yupi.yuaiagent.rag;
 
-import com.yupi.yuaiagent.context.UserContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,6 +29,9 @@ public class QueryRewritingService {
 
     @Resource
     private ChatMemory chatMemory;
+
+    @Resource
+    private VectorStore vectorStore;
 
     private static final String QUERY_REWRITING_PROMPT = "你是一个专业的对话理解助手，擅长处理多轮对话中的上下文依赖问题。\n\n" +
             "**任务**：结合最近的对话历史，将用户当前的问题改写为语义完整、独立可理解的查询语句。\n\n" +
@@ -95,21 +102,68 @@ public class QueryRewritingService {
 
     /**
      * 检查是否需要重写
-     * 基于多维度的智能判断
+     * <p>策略：先确认有上下文可参考（短期/长期记忆），再判断提问措辞是否模糊。
+     * 如果用户根本没有历史记忆，说明这是首轮对话，无需重写。
+     *
+     * @param conversationId 会话ID（userId:chatId 格式）
+     * @param userId         用户ID
+     * @param current        当前用户消息
      */
-    public boolean needRewriting(String current) {
-        // 处理边界情况
+    public boolean needRewriting(String conversationId, String userId, String current) {
         if (current == null || current.trim().isEmpty()) {
             return false;
         }
-        
-        // 纯标点符号检查
+
         String trimmed = current.trim();
         if (trimmed.equals("？") || trimmed.equals("?") || trimmed.equals("！") || trimmed.equals("!")) {
             return false;
         }
-        
-        // 1. 指示词检查（扩展版）
+
+        // 第一关：是否有上下文可参考？(短期记忆 / 长期记忆)
+        if (!hasShortTermMemory(conversationId) && !hasLongTermMemory(userId)) {
+            log.debug("[QueryRewriting] 无任何历史记忆，跳过重写");
+            return false;
+        }
+
+        // 第二关：提问措辞是否模糊？
+        return matchesContextKeywords(trimmed);
+    }
+
+    /**
+     * 检查是否存在短期记忆（Redis 中的对话历史）
+     */
+    private boolean hasShortTermMemory(String conversationId) {
+        try {
+            List<Message> history = chatMemory.get(conversationId);
+            return history != null && !history.isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 检查是否存在长期记忆（向量库中是否有该用户的事实）
+     */
+    private boolean hasLongTermMemory(String userId) {
+        try {
+            Filter.Expression userFilter = new FilterExpressionBuilder().eq("user_id", userId).build();
+            SearchRequest request = SearchRequest.builder()
+                    .query("check")
+                    .topK(1)
+                    .filterExpression(userFilter)
+                    .build();
+            List<Document> results = vectorStore.similaritySearch(request);
+            return !results.isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 关键词匹配：检查提问措辞是否模糊、依赖上下文
+     */
+    private boolean matchesContextKeywords(String current) {
+        // 1. 指示词
         String[] deicticWords = {
             "那", "这个", "那个", "它", "他们", "它们", "这些", "那些",
             "这里", "那里", "这儿", "那儿", "此时", "那时", "这样", "那样"
@@ -119,8 +173,8 @@ public class QueryRewritingService {
                 return true;
             }
         }
-        
-        // 2. 省略句式检查
+
+        // 2. 省略/依赖语气的句式
         String[] ellipsisIndicators = {
             "有吗", "是吗", "呢", "啊", "呀", "吧", "么", "嘛",
             "如何", "怎样", "怎么样", "如何做", "怎么做"
@@ -130,13 +184,13 @@ public class QueryRewritingService {
                 return true;
             }
         }
-        
-        // 3. 简短问题检查（可能需要上下文）
+
+        // 3. 过短的问题通常依赖上下文
         if (current.length() < 10 && (current.contains("?") || current.contains("？"))) {
             return true;
         }
-        
-        // 4. 依赖上下文的动词短语
+
+        // 4. 直接依赖上下文的动词短语
         String[] contextDependentVerbs = {
             "继续", "接着", "然后", "后来", "之前", "以后", "之前说的", "刚才说的"
         };
@@ -145,7 +199,7 @@ public class QueryRewritingService {
                 return true;
             }
         }
-        
+
         return false;
     }
     

@@ -43,7 +43,7 @@ public class MySQLChatMemory implements ChatMemory {
     @Resource(name = "dashscopeChatModel")
     private ChatModel chatModel;
 
-    @Value("${yu-ai.memory.safe-limit:100}")
+    @Value("${sakura.memory.safe-limit:100}")
     private int safeLimit;
 
     /**

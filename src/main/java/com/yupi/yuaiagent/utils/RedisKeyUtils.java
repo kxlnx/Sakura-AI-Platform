@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 public class RedisKeyUtils {
 
     // 自动获取 application.yml 中的应用名
-    @Value("${spring.application.name:yu-ai}")
+    @Value("${spring.application.name:sakura-agent}")
     private String appName;
 
     // 自动获取当前激活的环境 (local/prod)
@@ -16,7 +16,7 @@ public class RedisKeyUtils {
 
     /**
      * 生成聊天记忆的 Key
-     * 格式示例：yu-ai-agent:local:memory:chatId_123
+     * 格式示例：sakura-agent:local:memory:chatId_123
      */
     public String getChatMemoryKey(String chatId) {
         return String.format("%s:%s:memory:%s", appName, env, chatId);

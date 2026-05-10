@@ -124,14 +124,25 @@ public class LongTermMemoryReader {
      */
     private List<Document> semanticSearch(String userId, String query, int topK) {
         try {
+            Filter.Expression userFilter = buildUserFilter(userId);
+            log.info("[长期记忆] 搜索条件: userId={}, query={}, filter={}", userId, query, userFilter);
+            
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(query)
                     .topK(topK * 10) // 增加搜索范围，确保能找到用户记忆
-                    .filterExpression(buildUserFilter(userId))
+                    .filterExpression(userFilter)
                     .build();
 
             List<Document> results = vectorStore.similaritySearch(searchRequest);
             log.info("[长期记忆] 语义搜索召回 {} 条", results.size());
+            
+            // 打印召回的文档内容（调试用）
+            if (!results.isEmpty()) {
+                for (int i = 0; i < Math.min(3, results.size()); i++) {
+                    log.debug("[长期记忆] 文档{}: {}", i+1, results.get(i).getText());
+                }
+            }
+            
             return results.stream().limit(topK).collect(Collectors.toList());
         } catch (Exception e) {
             log.error("[长期记忆] 语义搜索失败", e);
@@ -245,7 +256,7 @@ public class LongTermMemoryReader {
             return "";
         }
 
-        StringBuilder sb = new StringBuilder("【用户长期记忆】\n");
+        StringBuilder sb = new StringBuilder("【小本本备忘录】\n");
         for (Document memory : memories) {
             sb.append("- " + memory.getText() + "\n");
         }

@@ -1,0 +1,1223 @@
+diff --git a/docs/AI-CODE-REVIEW-GUIDE.md b/docs/AI-CODE-REVIEW-GUIDE.md
+index 934dbfc..0d5cca7 100644
+--- a/docs/AI-CODE-REVIEW-GUIDE.md
++++ b/docs/AI-CODE-REVIEW-GUIDE.md
+@@ -1,129 +1,234 @@
+-# AI CodeReview 使用指南
++# AI CodeReview 完整使用指南（中文版）
+ 
+-## 概述
++> 适用于：Trae IDE（中文版）、Cursor IDE
+ 
+-本工具提供了一套标准化的AI CodeReview流程，通过精心设计的提示词模板，让AI能够：
++---
+ 
+-- **全面评审**：覆盖代码质量、安全性、性能、并发、业务逻辑等多个维度
+-- **分类清晰**：将问题分为 Critical（必须修复）、Warning（建议修复）、Info（优化建议）三个级别
+-- **格式统一**：输出标准化的评审报告，便于团队使用和跟踪
++## 一、项目文件说明
+ 
+-## 文件说明
++你项目的文件清单：
+ 
+ ```
+-.
+-├── .cursor/rules/
+-│   └── alc-review.mdc              # Cursor Project Rules 配置文件
++yu-ai-agent-master/
++├── .cursor/
++│   └── rules/
++│       └── alc-review.mdc              ← 规则文件
+ ├── scripts/
+-│   ├── alc-review.sh               # Linux/Mac 自动脚本
+-│   └── alc-review.bat              # Windows 自动脚本
+-└── src/main/resources/prompts/
+-    └── alc-review-prompt.md        # AI CodeReview 提示词模板
++│   ├── alc-review.bat                  ← 【重要】自动生成Diff脚本
++│   ├── alc-review.sh                   ← Mac/Linux脚本
++│   └── init-git.bat                   ← Git初始化脚本
++├── src/main/resources/prompts/
++│   └── alc-review-prompt.md            ← 【重要】AI提示词模板
++└── docs/
++    └── AI-CODE-REVIEW-GUIDE.md         ← 本教程
+ ```
+ 
+-## 使用方式
++---
+ 
+-### 方式一：自动脚本（推荐）
++## 二、第一步：初始化Git仓库（仅需执行一次）
+ 
+-#### Windows
++在项目根目录空白处，**按住 Shift + 右键**，选择"在此处打开 PowerShell 窗口"
+ 
+-```cmd
+-cd scripts
+-alc-review.bat              # 生成暂存区变更
+-alc-review.bat all         # 生成所有未合并到master的变更
+-alc-review.bat dev         # 基于dev分支生成diff
++运行：
++```powershell
++git init
++git add .
++git commit -m "Initial commit"
++git branch -M master
+ ```
+ 
+-#### Linux / Mac
++---
++
++## 三、第二步：在 Trae 中配置规则（仅需执行一次）
++
++### 3.1 打开设置
++
++1. 点击 Trae 左下角 **设置图标**（齿轮图标）
++2. 或者按 **Ctrl + 逗号**（Ctrl + ,）
++
++### 3.2 找到项目规则
+ 
+-```bash
+-chmod +x scripts/alc-review.sh
+-./scripts/alc-review.sh              # 生成暂存区变更
+-./scripts/alc-review.sh --all       # 生成所有未合并到master的变更
+-./scripts/alc-review.sh --base dev  # 基于dev分支生成diff
++1. 在搜索框中输入 **"规则"**
++2. 点击 **"项目"**
++3. 点击 **"规则"**
++
++### 3.3 添加规则
++
++1. 点击 **"添加规则"**
++2. 规则名称填写：`alc-review`
++3. 规则内容填写：
++
++```markdown
++@import "./src/main/resources/prompts/alc-review-prompt.md"
+ ```
+ 
+-### 方式二：手动复制diff
++4. 点击 **"保存"**
+ 
+-1. **生成diff文件**
+-   ```bash
+-   git diff master..HEAD > code_review.diff
+-   ```
++---
+ 
+-2. **在Cursor中导入规则**
+-   - 打开 Cursor Settings > Project > Rules
+-   - 添加新规则，选择 `.cursor/rules/alc-review.mdc`
++## 四、第三步：修改代码
+ 
+-3. **进行CodeReview**
+-   - 在Cursor中新建对话
+-   - 输入：`使用 @{alc-review} 规则对以下diff进行CodeReview`
+-   - 粘贴diff内容
++用 Trae 打开项目，随意改一个文件，比如添加一行注释
+ 
+-## 评审分类说明
++---
+ 
+-### Critical（必须修复）
+-- 安全漏洞
+-- 严重性能问题
+-- 数据一致性问题
+-- 线程安全问题
+-- 空指针/崩溃风险
++## 五、第四步：生成Diff文件
+ 
+-### Warning（建议修复）
+-- 代码质量问题
+-- 潜在性能隐患
+-- 可维护性问题
+-- 日志不规范
++### 5.1 打开终端
+ 
+-### Info（优化建议）
+-- 代码风格改进
+-- 命名优化
+-- 简化逻辑
++在项目根目录，**按住 Shift + 右键**，选择"在此处打开 PowerShell 窗口"
+ 
+-## 输出报告示例
++### 5.2 运行脚本
+ 
+-```markdown
+-# AI CodeReview 报告
++```powershell
++.\scripts\alc-review.bat
++```
+ 
+-## 评审概览
+-- **评审文件数**：3
+-- **Critical 问题数**：1
+-- **Warning 问题数**：2
+-- **Info 问题数**：1
++脚本运行后会自动输出diff内容和提示词
+ 
+ ---
+ 
+-## Critical 问题（必须修复）
++## 六、第五步：在 Trae 中触发规则进行CodeReview
++
++### 6.1 新建对话
++
++在 Trae 中新建一个聊天会话（按 `Ctrl + N`）
++
++### 6.2 输入触发规则（重要！！！）
++
++**在输入框中输入以下内容：**
++
++```
++使用 @{alc-review} 规则对以下diff进行CodeReview
++```
++
++### 6.3 粘贴Diff内容
++
++1. 鼠标选中终端窗口
++2. 按 `Ctrl + A` 全选
++3. 按 `Ctrl + C` 复制
++4. 回到 Trae 输入框，按 `Ctrl + V` 粘贴
++
++### 6.4 发送
+ 
+-| # | 文件路径 | 问题描述 | 影响 | 建议修复方案 |
+-|---|---------|---------|------|------------|
+-| 1 | UserService.java:45 | SQL注入风险 | 攻击者可构造恶意输入 | 使用预编译SQL或参数化查询 |
++按 **回车键** 发送
++
++### 6.5 等待AI输出评审报告
++
++AI会按照规则输出格式化的CodeReview报告！
+ 
+ ---
+ 
+-## Warning 问题（建议修复）
++## 七、完整操作流程图
+ 
+-| # | 文件路径 | 问题描述 | 严重程度 | 建议修复方案 |
+-|---|---------|---------|---------|------------|
+-| 1 | OrderService.java:78 | N+1查询问题 | 数据库压力过大 | 使用批量查询或JOIN |
++```
++┌─────────────────────────────────────────────────────────────────┐
++│                    AI CodeReview 操作流程                          │
++├─────────────────────────────────────────────────────────────────┤
++│                                                                  │
++│  第一步：修改代码         用 Trae 打开项目，随意改一个文件           │
++│        │                                                       │
++│        ▼                                                       │
++│  第二步：生成 Diff      终端运行 .\scripts\alc-review.bat       │
++│        │                                                       │
++│        ▼                                                       │
++│  第三步：全选复制       终端按 Ctrl+A 全选，Ctrl+C 复制           │
++│        │                                                       │
++│        ▼                                                       │
++│  第四步：粘贴到 Trae   Trae按 Ctrl+V 粘贴                       │
++│        │                                                       │
++│        ▼                                                       │
++│  第五步：发送          输入 "使用 @{alc-review} 规则..." + 发送  │
++│                                                                  │
++└─────────────────────────────────────────────────────────────────┘
++```
+ 
+ ---
+ 
+-## Info 优化建议
++## 八、关键：如何在Trae中触发规则
++
++### 触发语法
++
++```
++使用 @{alc-review} 规则对以下diff进行CodeReview
++```
++
++### 完整输入示例
++
++```
++使用 @{alc-review} 规则对以下diff进行CodeReview
++
++diff --git a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java b/src/main/java/...
++index abc123..def456 100644
++--- a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
+++++ b/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
++@@ -22,6 +22,7 @@
+++// 我是测试注释
++```
+ 
+-| # | 文件路径 | 当前代码 | 优化建议 |
+-|---|---------|---------|---------|
+-| 1 | Utils.java:23 | getTmp | getTemperature 更清晰 |
++### 示意图
++
++```
++┌─────────────────────────────────────────────────────────────┐
++│  Trae 对话窗口                                              │
++│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
++│                                                              │
++│  用户输入:                                                   │
++│  ┌─────────────────────────────────────────────────────┐   │
++│  │ 使用 @{alc-review} 规则对以下diff进行CodeReview        │   │
++│  │                                                      │   │
++│  │ diff --git a/src/main/java/...                       │   │
++│  │ index abc123..def456 100644                         │   │
++│  │ ...                                                  │   │
++│  └─────────────────────────────────────────────────────┘   │
++│                                                              │
++│                                              [发送按钮]       │
++└─────────────────────────────────────────────────────────────┘
++```
+ 
+ ---
+ 
+-## 总结
+-1. 重点关注UserService.sqlInject()方法的参数校验
+-2. OrderService建议使用批量查询优化性能
++## 九、快速参考
++
++```powershell
++# 1. 修改代码后，终端运行：
++.\scripts\alc-review.bat
++
++# 2. Trae 新建对话，输入：
++使用 @{alc-review} 规则对以下diff进行CodeReview
++
++# 3. Ctrl+A 全选终端内容，Ctrl+C 复制，Ctrl+V 粘贴到 Trae
++
++# 4. 按回车发送
+ ```
+ 
+-## 最佳实践
++---
++
++## 十、常见问题
++
++### Q1: @{alc-review} 不起作用
++- 确保规则名称是 `alc-review`，不是其他名字
++- 确保规则内容是 `@import "./src/main/resources/prompts/alc-review-prompt.md"`
++
++### Q2: Diff 文件为空
++- 确保已初始化 Git 仓库
++- 确保已修改文件但还没提交
++
++### Q3: 找不到脚本
++- 在终端中进入项目根目录：`cd G:\新建文件夹\yu-ai-agent-master`
++- 然后运行：`.\scripts\alc-review.bat`
++
++---
++
++## 十一、文件位置汇总
++
++| 文件 | 路径 |
++|-----|------|
++| 详细教程 | `docs/AI-CODE-REVIEW-GUIDE.md` |
++| AI提示词 | `src/main/resources/prompts/alc-review-prompt.md` |
++| 规则文件 | `.cursor/rules/alc-review.mdc` |
++| Windows脚本 | `scripts/alc-review.bat` |
++
++---
+ 
+-1. **提交前Review**：在提交代码前运行一次AI CodeReview
+-2. **优先级处理**：先处理Critical问题，再处理Warning，最后处理Info
+-3. **结合人工Review**：AI Review不能替代人工评审，仅作为辅助工具
+-4. **持续优化**：根据团队实际需求调整提示词模板
+\ No newline at end of file
++**现在你可以在 Trae 中配置并使用了！**
+\ No newline at end of file
+diff --git a/pom.xml b/pom.xml
+index 50eb264..0150c91 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -181,7 +181,6 @@
+             <groupId>com.itextpdf</groupId>
+             <artifactId>font-asian</artifactId>
+             <version>9.1.0</version>
+-            <scope>test</scope>
+         </dependency>
+         <dependency>
+             <groupId>cn.hutool</groupId>
+diff --git a/scripts/alc-review.bat b/scripts/alc-review.bat
+index dd07a3b..0bcf9e4 100644
+--- a/scripts/alc-review.bat
++++ b/scripts/alc-review.bat
+@@ -19,17 +19,6 @@ exit /b 1
+ :found_git
+ cd /d "%PROJECT_DIR%"
+ 
+-set BASE_BRANCH=master
+-set SCOPE=staged
+-
+-if "%~1"=="all" (
+-    set SCOPE=all
+-    set BASE_BRANCH=master
+-) else if not "%~1"=="" (
+-    set SCOPE=all
+-    set BASE_BRANCH=%~1
+-)
+-
+ for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+ set TIMESTAMP=%dt:~0,8%_%dt:~8,6%
+ set DIFF_FILE=%PROJECT_DIR%scripts\code_review_%TIMESTAMP%.diff
+@@ -40,16 +29,12 @@ echo.
+ 
+ echo Generating Diff file...
+ 
+-if "%SCOPE%"=="staged" (
+-    echo Generating staged changes diff...
+-    git diff --cached > "%DIFF_FILE%"
+-) else (
+-    echo Generating diff against %BASE_BRANCH% branch...
+-    git diff %BASE_BRANCH%..HEAD > "%DIFF_FILE%"
+-)
++git diff HEAD > "%DIFF_FILE%"
+ 
+ for %%A in ("%DIFF_FILE%") do if %%~zA==0 (
+     echo Error: No code changes found
++    echo.
++    echo Tip: Make changes to files first, or use 'git add' to stage changes
+     del "%DIFF_FILE%"
+     exit /b 1
+ )
+diff --git a/src/main/java/com/yupi/yuaiagent/agent/BaseAgent.java b/src/main/java/com/yupi/yuaiagent/agent/BaseAgent.java
+index 44f6031..5624bc5 100644
+--- a/src/main/java/com/yupi/yuaiagent/agent/BaseAgent.java
++++ b/src/main/java/com/yupi/yuaiagent/agent/BaseAgent.java
+@@ -36,7 +36,7 @@ public abstract class BaseAgent {
+ 
+     // 执行步骤控制
+     private int currentStep = 0;
+-    private int maxSteps = 10;
++    private int maxSteps = 5;
+ 
+     // LLM 大模型
+     private ChatClient chatClient;
+@@ -176,6 +176,107 @@ public abstract class BaseAgent {
+         return sseEmitter;
+     }
+ 
++    /**
++     * 运行代理（流式输出，带记忆和RAG）
++     *
++     * @param userPrompt 用户提示词
++     * @param chatId 对话ID
++     * @param userId 用户ID
++     * @return 执行结果
++     */
++    public SseEmitter runStreamWithMemory(String userPrompt, String chatId, String userId) {
++        // 创建一个超时时间较长的 SseEmitter
++        SseEmitter sseEmitter = new SseEmitter(300000L); // 5 分钟超时
++        // 使用线程异步处理，避免阻塞主线程
++        CompletableFuture.runAsync(() -> {
++            // 1、基础校验
++            try {
++                if (this.state != AgentState.IDLE) {
++                    sseEmitter.send("错误：无法从状态运行代理：" + this.state);
++                    sseEmitter.complete();
++                    return;
++                }
++                if (StrUtil.isBlank(userPrompt)) {
++                    sseEmitter.send("错误：不能使用空提示词运行代理");
++                    sseEmitter.complete();
++                    return;
++                }
++                if (StrUtil.isBlank(chatId)) {
++                    sseEmitter.send("错误：对话ID不能为空");
++                    sseEmitter.complete();
++                    return;
++                }
++                if (StrUtil.isBlank(userId)) {
++                    sseEmitter.send("错误：用户ID不能为空");
++                    sseEmitter.complete();
++                    return;
++                }
++            } catch (Exception e) {
++                sseEmitter.completeWithError(e);
++            }
++            // 2、执行，更改状态
++            this.state = AgentState.RUNNING;
++            // 记录消息上下文
++            messageList.add(new UserMessage(userPrompt));
++            // 保存结果列表
++            List<String> results = new ArrayList<>();
++            try {
++                // 如果是ToolCallAgent，设置对话参数
++                if (this instanceof ToolCallAgent) {
++                    ((ToolCallAgent) this).setConversationParams(chatId, userId);
++                }
++                // 执行循环
++                for (int i = 0; i < maxSteps && state != AgentState.FINISHED; i++) {
++                    int stepNumber = i + 1;
++                    currentStep = stepNumber;
++                    log.info("Executing step {}/{}", stepNumber, maxSteps);
++                    // 单步执行
++                    String stepResult = step();
++                    String result = "Step " + stepNumber + ": " + stepResult;
++                    results.add(result);
++                    // 输出当前每一步的结果到 SSE
++                    sseEmitter.send(result);
++                }
++                // 检查是否超出步骤限制
++                if (currentStep >= maxSteps) {
++                    state = AgentState.FINISHED;
++                    results.add("Terminated: Reached max steps (" + maxSteps + ")");
++                    sseEmitter.send("执行结束：达到最大步骤（" + maxSteps + "）");
++                }
++                // 正常完成
++                sseEmitter.complete();
++            } catch (Exception e) {
++                state = AgentState.ERROR;
++                log.error("error executing agent", e);
++                try {
++                    sseEmitter.send("执行错误：" + e.getMessage());
++                    sseEmitter.complete();
++                } catch (IOException ex) {
++                    sseEmitter.completeWithError(ex);
++                }
++            } finally {
++                // 3、清理资源
++                this.cleanup();
++            }
++        });
++
++        // 设置超时回调
++        sseEmitter.onTimeout(() -> {
++            this.state = AgentState.ERROR;
++            this.cleanup();
++            log.warn("SSE connection timeout");
++        });
++        // 设置完成回调
++        sseEmitter.onCompletion(() -> {
++            if (this.state == AgentState.RUNNING) {
++                this.state = AgentState.FINISHED;
++            }
++            this.cleanup();
++            log.info("SSE connection completed");
++        });
++        return sseEmitter;
++    }
++
+     /**
+      * 定义单个步骤
+      *
+diff --git a/src/main/java/com/yupi/yuaiagent/agent/ToolCallAgent.java b/src/main/java/com/yupi/yuaiagent/agent/ToolCallAgent.java
+index 56a3aa4..1ad9a4a 100644
+--- a/src/main/java/com/yupi/yuaiagent/agent/ToolCallAgent.java
++++ b/src/main/java/com/yupi/yuaiagent/agent/ToolCallAgent.java
+@@ -41,6 +41,10 @@ public class ToolCallAgent extends ReActAgent {
+     // 禁用 Spring AI 内置的工具调用机制，自己维护选项和消息上下文
+     private final ChatOptions chatOptions;
+ 
++    // 对话相关参数
++    private String chatId;
++    private String userId;
++
+     public ToolCallAgent(ToolCallback[] availableTools) {
+         super();
+         this.availableTools = availableTools;
+@@ -51,6 +55,16 @@ public class ToolCallAgent extends ReActAgent {
+                 .build();
+     }
+ 
++    /**
++     * 设置对话参数
++     * @param chatId 对话ID
++     * @param userId 用户ID
++     */
++    public void setConversationParams(String chatId, String userId) {
++        this.chatId = chatId;
++        this.userId = userId;
++    }
++
+     /**
+      * 处理当前状态并决定下一步行动
+      *
+@@ -73,9 +87,19 @@ public class ToolCallAgent extends ReActAgent {
+         List<Message> messageList = getMessageList();
+         Prompt prompt = new Prompt(messageList, this.chatOptions);
+         try {
+-            ChatResponse chatResponse = getChatClient().prompt(prompt)
++            // 构建聊天客户端调用，添加记忆和RAG支持
++            var chatClientCall = getChatClient().prompt(prompt)
+                     .system(getSystemPrompt())
+-                    .tools(availableTools)
++                    .toolCallbacks(availableTools);  // ✅ 修复：使用 toolCallbacks() 而非 tools()
++
++            // 添加对话记忆参数
++            if (StrUtil.isNotBlank(chatId) && StrUtil.isNotBlank(userId)) {
++                String memoryKey = userId + ":" + chatId;
++                chatClientCall = chatClientCall.advisors(spec -> spec.param("conversationId", memoryKey));
++                chatClientCall = chatClientCall.advisors(spec -> spec.param("userId", userId));
++            }
++
++            ChatResponse chatResponse = chatClientCall
+                     .call()
+                     .chatResponse();
+ 
+diff --git a/src/main/java/com/yupi/yuaiagent/agent/YuManus.java b/src/main/java/com/yupi/yuaiagent/agent/YuManus.java
+index cf27d38..a741b26 100644
+--- a/src/main/java/com/yupi/yuaiagent/agent/YuManus.java
++++ b/src/main/java/com/yupi/yuaiagent/agent/YuManus.java
+@@ -1,7 +1,12 @@
+ package com.yupi.yuaiagent.agent;
+ 
+ import com.yupi.yuaiagent.advisor.MyLoggerAdvisor;
++import com.yupi.yuaiagent.memory.LongTermMemoryAdvisor;
++import jakarta.annotation.PostConstruct;
++import jakarta.annotation.Resource;
+ import org.springframework.ai.chat.client.ChatClient;
++import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
++import org.springframework.ai.chat.memory.ChatMemory;
+ import org.springframework.ai.chat.model.ChatModel;
+ import org.springframework.ai.tool.ToolCallback;
+ import org.springframework.stereotype.Component;
+@@ -12,8 +17,27 @@ import org.springframework.stereotype.Component;
+ @Component
+ public class YuManus extends ToolCallAgent {
+ 
+-    public YuManus(ToolCallback[] allTools, ChatModel dashscopeChatModel) {
+-        super(allTools);
++    @Resource
++    private ChatMemory chatMemory;
++
++    @Resource
++    private LongTermMemoryAdvisor longTermMemoryAdvisor;
++
++    @Resource
++    private ChatModel dashscopeChatModel;
++
++    /**
++     * 构造函数：Spring 自动注入依赖并传递给父类
++     */
++    public YuManus(ToolCallback[] allTools) {
++        super(allTools); // ✅ 正确传递 tools 给父类
++    }
++
++    /**
++     * 初始化方法：在字段注入完成后配置 ChatClient
++     */
++    @PostConstruct
++    public void init() {
+         this.setName("yuManus");
+         String SYSTEM_PROMPT = """
+                 You are YuManus, an all-capable AI assistant, aimed at solving any task presented by the user.
+@@ -27,10 +51,18 @@ public class YuManus extends ToolCallAgent {
+                 If you want to stop the interaction at any point, use the `terminate` tool/function call.
+                 """;
+         this.setNextStepPrompt(NEXT_STEP_PROMPT);
+-        this.setMaxSteps(20);
+-        // 初始化 AI 对话客户端
++        this.setMaxSteps(5);
++        
++        // 初始化 AI 对话客户端（此时字段已注入，chatMemory 不为 null）
+         ChatClient chatClient = ChatClient.builder(dashscopeChatModel)
+-                .defaultAdvisors(new MyLoggerAdvisor())
++                .defaultAdvisors(
++                        // 短期记忆 Advisor（memoryKey 在运行时动态传入）
++                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
++                        // 长期记忆 Advisor（内部自动从 UserContext 获取 userId）
++                        longTermMemoryAdvisor,
++                        // 日志 Advisor（调试用）
++                        new MyLoggerAdvisor()
++                )
+                 .build();
+         this.setChatClient(chatClient);
+     }
+diff --git a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java b/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
+index 013d4f2..c2547dd 100644
+--- a/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
++++ b/src/main/java/com/yupi/yuaiagent/app/LoveApp.java
+@@ -18,13 +18,16 @@ import org.redisson.api.RedissonClient;
+ import org.springframework.ai.chat.client.ChatClient;
+ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+ import org.springframework.ai.chat.client.advisor.api.Advisor;
+-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+ import org.springframework.ai.chat.memory.ChatMemory;
+ import org.springframework.ai.chat.model.ChatModel;
+ import org.springframework.ai.chat.model.ChatResponse;
++import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
++import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
++import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
+ import org.springframework.ai.tool.ToolCallback;
+ import org.springframework.ai.tool.ToolCallbackProvider;
+ import org.springframework.ai.vectorstore.VectorStore;
++import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+ import org.springframework.stereotype.Component;
+ import reactor.core.publisher.Flux;
+ 
+@@ -243,20 +246,24 @@ public class LoveApp {
+             String memoryKey = userId + ":" + chatId;
+             log.info("[doChatWithRag] userId={}, chatId={}, memoryKey={}, message={}", userId, chatId, memoryKey, message);
+             
+-            // 构建查询（集成 Query Rewriting）
+-            String query = message;
+-            if (queryRewritingService.needRewriting(message)) {
+-                // 使用历史对话进行重写
+-                query = queryRewritingService.rewriteQuery(memoryKey, message);
+-                log.info("[doChatWithRag] 重写后的查询: {}", query);
+-            }
++            // RAG 知识库检索（通用恋爱知识，不需要用户过滤）
++            DocumentRetriever documentRetriever = VectorStoreDocumentRetriever.builder()
++                    .vectorStore(loveAppVectorStore)
++                    .similarityThreshold(0.5)
++                    .topK(3)
++                    .build();
++            
++            // 使用检索增强顾问
++            Advisor ragAdvisor = RetrievalAugmentationAdvisor.builder()
++                    .documentRetriever(documentRetriever)
++                    .build();
+             
+             ChatResponse chatResponse = chatClient
+                     .prompt()
+-                    .user(query) // 使用重写后的查询
++                    .user(message)
+                     .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, memoryKey))
+                     .advisors(spec -> spec.param("userId", userId))
+-                    .advisors(new QuestionAnswerAdvisor(loveAppVectorStore))
++                    .advisors(ragAdvisor) // RAG 知识库问答
+                     .call()
+                     .chatResponse();
+             String content = chatResponse.getResult().getOutput().getText();
+diff --git a/src/main/java/com/yupi/yuaiagent/chatmemory/RedisListChatMemory.java b/src/main/java/com/yupi/yuaiagent/chatmemory/RedisListChatMemory.java
+index 2709466..280a1c5 100644
+--- a/src/main/java/com/yupi/yuaiagent/chatmemory/RedisListChatMemory.java
++++ b/src/main/java/com/yupi/yuaiagent/chatmemory/RedisListChatMemory.java
+@@ -46,10 +46,18 @@ public class RedisListChatMemory implements ChatMemory {
+     @Override
+     public void add(String conversationId, List<Message> newMessages) {
+         String redisKey = buildRedisKey(conversationId);
++        
++        log.info("[短期记忆-写] conversationId={}, redisKey={}, 消息数量={}", conversationId, redisKey, newMessages.size());
++        for (int i = 0; i < newMessages.size(); i++) {
++            Message msg = newMessages.get(i);
++            log.info("[短期记忆-写] 消息{}: {} = {}", i, msg.getMessageType(), msg.getText().substring(0, Math.min(50, msg.getText().length())));
++        }
+ 
+         String roundJson = serializeRound(newMessages);
+         stringRedisTemplate.opsForList().rightPush(redisKey, roundJson);
+         stringRedisTemplate.expire(redisKey, 7, TimeUnit.DAYS);
++        
++        log.info("[短期记忆-写] Redis 写入成功, key={}", redisKey);
+ 
+         checkAndCompress(redisKey);
+     }
+@@ -57,11 +65,16 @@ public class RedisListChatMemory implements ChatMemory {
+     @Override
+     public List<Message> get(String conversationId) {
+         String redisKey = buildRedisKey(conversationId);
++        
++        log.info("[短期记忆-读] conversationId={}, redisKey={}", conversationId, redisKey);
+ 
+         List<String> rawRounds = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
+         if (rawRounds == null || rawRounds.isEmpty()) {
++            log.info("[短期记忆-读] Redis 中无历史数据");
+             return new ArrayList<>();
+         }
++        
++        log.info("[短期记忆-读] Redis 召回 {} 轮对话", rawRounds.size());
+ 
+         List<Message> allMessages = new ArrayList<>();
+         for (String rawRound : rawRounds) {
+@@ -69,7 +82,15 @@ public class RedisListChatMemory implements ChatMemory {
+         }
+ 
+         int fromIndex = Math.max(0, allMessages.size() - safeLimit);
+-        return allMessages.subList(fromIndex, allMessages.size());
++        List<Message> result = allMessages.subList(fromIndex, allMessages.size());
++        
++        log.info("[短期记忆-读] 返回 {} 条消息（总消息数={}, safeLimit={}）", result.size(), allMessages.size(), safeLimit);
++        for (int i = 0; i < result.size(); i++) {
++            Message msg = result.get(i);
++            log.info("[短期记忆-读] 消息{}: {} = {}", i, msg.getMessageType(), msg.getText().substring(0, Math.min(50, msg.getText().length())));
++        }
++        
++        return result;
+     }
+ 
+     @Override
+@@ -79,6 +100,7 @@ public class RedisListChatMemory implements ChatMemory {
+     }
+ 
+     private String buildRedisKey(String conversationId) {
++        // conversationId 已经是 userId:chatId 的格式，直接拼接即可
+         return MEMORY_KEY_PREFIX + conversationId;
+     }
+ 
+diff --git a/src/main/java/com/yupi/yuaiagent/controller/AiController.java b/src/main/java/com/yupi/yuaiagent/controller/AiController.java
+index bea3ba7..b9c9d19 100644
+--- a/src/main/java/com/yupi/yuaiagent/controller/AiController.java
++++ b/src/main/java/com/yupi/yuaiagent/controller/AiController.java
+@@ -28,6 +28,9 @@ public class AiController {
+     @Resource
+     private ChatModel dashscopeChatModel;
+ 
++    @Resource
++    private YuManus yuManus;
++
+     /**
+      * 同步调用 AI 恋爱大师应用
+      *
+@@ -99,7 +102,36 @@ public class AiController {
+      */
+     @GetMapping("/manus/chat")
+     public SseEmitter doChatWithManus(String message) {
+-        YuManus yuManus = new YuManus(allTools, dashscopeChatModel);
++        // 使用 Spring 注入的 yuManus Bean（已在 @PostConstruct 中初始化）
+         return yuManus.runStream(message);
+     }
++
++    /**
++     * 带记忆和RAG的 Manus 超级智能体调用
++     * TODO: 如需支持 userId 隔离，请参考 LoveApp 实现，在运行时通过 .advisors(spec -> spec.param(...)) 传入
++     *
++     * @param message
++     * @param chatId
++     * @param userId
++     * @return
++     */
++//    @GetMapping("/manus/chat/with-memory")
++//    public String doChatWithManusWithMemory(String message, String chatId, String userId) {
++//        // YuManus 已通过 defaultAdvisors 集成记忆功能，userId 由 UserContext 自动获取
++//        return yuManus.run(message);
++//    }
++
++    /**
++     * 带记忆和RAG的 Manus 超级智能体流式调用
++     * TODO: 如需支持 userId 隔离，请参考 LoveApp 实现
++     *
++     * @param message
++     * @param chatId
++     * @param userId
++     * @return
++     */
++//    @GetMapping("/manus/chat/with-memory/sse")
++//    public SseEmitter doChatWithManusWithMemorySSE(String message, String chatId, String userId) {
++//        return yuManus.runStream(message);
++//    }
+ }
+diff --git a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryAdvisor.java b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryAdvisor.java
+index 694f134..ab8ec86 100644
+--- a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryAdvisor.java
++++ b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryAdvisor.java
+@@ -78,8 +78,16 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
+             List<String> memoryContents = handleMemoryRead(userId, userMessage);
+             if (!memoryContents.isEmpty()) {
+                 log.info("[长期记忆] 召回 {} 条记忆", memoryContents.size());
+-                // 暂时注释掉记忆注入逻辑，避免API兼容性问题
+-                // 核心问题是记忆隔离，已经通过userId过滤解决
++                // 将长期记忆注入到系统消息中
++                String memorySystemMessage = buildMemorySystemMessage(memoryContents);
++                SystemMessage systemMessage = new SystemMessage(memorySystemMessage);
++                
++                // 创建新的Prompt，将系统消息添加到前面
++                List<Message> messages = new ArrayList<>(request.prompt().getInstructions());
++                messages.add(0, systemMessage); // 在最前面添加记忆系统消息
++                org.springframework.ai.chat.prompt.Prompt newPrompt = new org.springframework.ai.chat.prompt.Prompt(messages, request.prompt().getOptions());
++                
++                return new ChatClientRequest(newPrompt, request.context());
+             }
+ 
+         } catch (Exception e) {
+@@ -93,13 +101,25 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
+      * 从请求中提取用户ID
+      */
+     private String extractUserId(ChatClientRequest request) {
++        // 方案1：优先从 UserContext 获取（测试环境或登录后的用户）
++        String userIdFromContext = com.yupi.yuaiagent.context.UserContext.getUserId();
++        if (userIdFromContext != null && !"anonymous".equals(userIdFromContext)) {
++            log.debug("[长期记忆] 从 UserContext 获取 userId: {}", userIdFromContext);
++            return userIdFromContext;
++        }
++        
++        // 方案2：从 request context 中获取
+         Map<String, Object> params = request.context();
+         if (params != null && params.containsKey(USER_ID_PARAM)) {
+             Object userId = params.get(USER_ID_PARAM);
+             if (userId != null && !userId.toString().isEmpty()) {
++                log.debug("[长期记忆] 从 request context 获取 userId: {}", userId);
+                 return userId.toString();
+             }
+         }
++        
++        // 方案3：默认值
++        log.warn("[长期记忆] 未找到 userId，使用默认值 default_user");
+         return "default_user";
+     }
+ 
+diff --git a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java
+index a4d055d..f8bc07c 100644
+--- a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java
++++ b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryReader.java
+@@ -124,14 +124,25 @@ public class LongTermMemoryReader {
+      */
+     private List<Document> semanticSearch(String userId, String query, int topK) {
+         try {
++            Filter.Expression userFilter = buildUserFilter(userId);
++            log.info("[长期记忆] 搜索条件: userId={}, query={}, filter={}", userId, query, userFilter);
++            
+             SearchRequest searchRequest = SearchRequest.builder()
+                     .query(query)
+                     .topK(topK * 10) // 增加搜索范围，确保能找到用户记忆
+-                    .filterExpression(buildUserFilter(userId))
++                    .filterExpression(userFilter)
+                     .build();
+ 
+             List<Document> results = vectorStore.similaritySearch(searchRequest);
+             log.info("[长期记忆] 语义搜索召回 {} 条", results.size());
++            
++            // 打印召回的文档内容（调试用）
++            if (!results.isEmpty()) {
++                for (int i = 0; i < Math.min(3, results.size()); i++) {
++                    log.debug("[长期记忆] 文档{}: {}", i+1, results.get(i).getText());
++                }
++            }
++            
+             return results.stream().limit(topK).collect(Collectors.toList());
+         } catch (Exception e) {
+             log.error("[长期记忆] 语义搜索失败", e);
+diff --git a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java
+index 2a16178..6322ae8 100644
+--- a/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java
++++ b/src/main/java/com/yupi/yuaiagent/memory/LongTermMemoryWriter.java
+@@ -47,7 +47,7 @@ public class LongTermMemoryWriter {
+         try {
+             // 1. 先检查是否已存在相似的记忆
+             if (isSimilarMemoryExists(userId, fact)) {
+-                log.debug("[长期记忆] 检测到相似记忆已存在，跳过写入: userId={}", userId);
++                log.info("[长期记忆] 检测到相似记忆已存在，跳过写入: userId={}, fact={}", userId, fact);
+                 return;
+             }
+ 
+@@ -63,6 +63,7 @@ public class LongTermMemoryWriter {
+ 
+             // 3. 创建文档
+             Document document = new Document(fact, docMetadata);
++            log.info("[长期记忆] 准备写入向量库: userId={}, fact={}, metadata={}", userId, fact, docMetadata);
+ 
+             // 4. 写入向量库
+             vectorStore.add(List.of(document));
+diff --git a/src/main/java/com/yupi/yuaiagent/rag/QueryRewritingAdvisor.java b/src/main/java/com/yupi/yuaiagent/rag/QueryRewritingAdvisor.java
+index 14b8ca5..b442cba 100644
+--- a/src/main/java/com/yupi/yuaiagent/rag/QueryRewritingAdvisor.java
++++ b/src/main/java/com/yupi/yuaiagent/rag/QueryRewritingAdvisor.java
+@@ -59,6 +59,10 @@ public class QueryRewritingAdvisor implements CallAdvisor, StreamAdvisor {
+                             // 重写查询，传递完整的conversationId
+                             String rewrittenQuery = queryRewritingService.rewriteQuery(conversationId, currentMessage);
+                             log.info("[QueryRewritingAdvisor] 重写查询: {} -> {}", currentMessage, rewrittenQuery);
++                            
++                            // 关键：创建新的Prompt，将重写后的查询替换原始用户消息
++                            org.springframework.ai.chat.prompt.Prompt newPrompt = request.prompt().augmentUserMessage(rewrittenQuery);
++                            request = new ChatClientRequest(newPrompt, request.context());
+                         }
+                     }
+                 }
+diff --git a/src/main/java/com/yupi/yuaiagent/tools/PDFGenerationTool.java b/src/main/java/com/yupi/yuaiagent/tools/PDFGenerationTool.java
+index de58f7c..5e8b6da 100644
+--- a/src/main/java/com/yupi/yuaiagent/tools/PDFGenerationTool.java
++++ b/src/main/java/com/yupi/yuaiagent/tools/PDFGenerationTool.java
+@@ -8,20 +8,29 @@ import com.itextpdf.kernel.pdf.PdfWriter;
+ import com.itextpdf.layout.Document;
+ import com.itextpdf.layout.element.Paragraph;
+ import com.yupi.yuaiagent.constant.FileConstant;
++import lombok.extern.slf4j.Slf4j;
+ import org.springframework.ai.tool.annotation.Tool;
+ import org.springframework.ai.tool.annotation.ToolParam;
+ 
+ import java.io.IOException;
++import java.nio.file.Paths;
+ 
+ /**
+  * PDF 生成工具
+  */
++@Slf4j
+ public class PDFGenerationTool {
+ 
+     @Tool(description = "Generate a PDF file with given content", returnDirect = false)
+     public String generatePDF(
+             @ToolParam(description = "Name of the file to save the generated PDF") String fileName,
+             @ToolParam(description = "Content to be included in the PDF") String content) {
++        // 清理内容中的特殊字符，避免 JSON 解析失败
++        if (content != null) {
++            content = content.replace("\r\n", "\n")  // 统一换行符
++                           .replace("\r", "\n");
++        }
++        
+         String fileDir = FileConstant.FILE_SAVE_DIR + "/pdf";
+         String filePath = fileDir + "/" + fileName;
+         try {
+@@ -31,22 +40,59 @@ public class PDFGenerationTool {
+             try (PdfWriter writer = new PdfWriter(filePath);
+                  PdfDocument pdf = new PdfDocument(writer);
+                  Document document = new Document(pdf)) {
+-                // 自定义字体（需要人工下载字体文件到特定目录）
+-//                String fontPath = Paths.get("src/main/resources/static/fonts/simsun.ttf")
+-//                        .toAbsolutePath().toString();
+-//                PdfFont font = PdfFontFactory.createFont(fontPath,
+-//                        PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+-                // 使用内置中文字体
+-                PdfFont font = PdfFontFactory.createFont("STSongStd-Light", "UniGB-UCS2-H");
+-                document.setFont(font);
++                // 直接使用默认字体（不依赖任何系统字体）
++                log.info("[PDF生成] 使用默认字体");
++                
+                 // 创建段落
+                 Paragraph paragraph = new Paragraph(content);
+                 // 添加段落并关闭文档
+                 document.add(paragraph);
+             }
++            log.info("[PDF生成] 成功: {}", filePath);
+             return "PDF generated successfully to: " + filePath;
+-        } catch (IOException e) {
++        } catch (Exception e) {
++            log.error("[PDF生成] 失败: {}", e.getMessage(), e);
+             return "Error generating PDF: " + e.getMessage();
+         }
+     }
++
++    /**
++     * 加载中文字体（按优先级尝试多个字体）
++     * 如果所有字体都失败，会抛出异常，调用方应该捕获并使用默认字体
++     */
++    private PdfFont loadChineseFont() throws IOException {
++        // 尝试使用 iText 自带的中文字体（需要 font-asian 依赖）
++        try {
++            log.info("[PDF生成] 尝试加载 STSong-Light 字体");
++            return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", 
++                    PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
++        } catch (Exception e) {
++            log.debug("[PDF生成] STSong-Light 加载失败: {}", e.getMessage());
++        }
++        
++        // 尝试 Windows 系统字体
++        String[] fontPaths = {
++            "C:\\Windows\\Fonts\\simsun.ttc,0",  // 宋体
++            "C:\\Windows\\Fonts\\msyh.ttf",       // 微软雅黑
++            "C:\\Windows\\Fonts\\simhei.ttf"      // 黑体
++        };
++        
++        for (String fontPath : fontPaths) {
++            try {
++                java.io.File fontFile = new java.io.File(fontPath.split(",")[0]);
++                if (!fontFile.exists()) {
++                    continue;
++                }
++                
++                log.info("[PDF生成] 尝试加载字体: {}", fontPath);
++                return PdfFontFactory.createFont(fontPath, "UniGB-UCS2-H",
++                        PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
++            } catch (Exception e) {
++                log.debug("[PDF生成] 字体加载失败: {}", fontPath);
++            }
++        }
++        
++        // 所有字体都失败，抛出异常
++        throw new IOException("无法加载任何中文字体");
++    }
+ }
+diff --git a/src/main/java/com/yupi/yuaiagent/tools/ResourceDownloadTool.java b/src/main/java/com/yupi/yuaiagent/tools/ResourceDownloadTool.java
+index 2f555b0..9f50ef6 100644
+--- a/src/main/java/com/yupi/yuaiagent/tools/ResourceDownloadTool.java
++++ b/src/main/java/com/yupi/yuaiagent/tools/ResourceDownloadTool.java
+@@ -3,6 +3,7 @@ package com.yupi.yuaiagent.tools;
+ import cn.hutool.core.io.FileUtil;
+ import cn.hutool.http.HttpUtil;
+ import com.yupi.yuaiagent.constant.FileConstant;
++import lombok.extern.slf4j.Slf4j;
+ import org.springframework.ai.tool.annotation.Tool;
+ import org.springframework.ai.tool.annotation.ToolParam;
+ 
+@@ -11,6 +12,8 @@ import java.io.File;
+ /**
+  * 资源下载工具
+  */
++
++@Slf4j
+ public class ResourceDownloadTool {
+ 
+     @Tool(description = "Download a resource from a given URL")
+@@ -20,10 +23,11 @@ public class ResourceDownloadTool {
+         try {
+             // 创建目录
+             FileUtil.mkdir(fileDir);
+-            // 使用 Hutool 的 downloadFile 方法下载资源
+-            HttpUtil.downloadFile(url, new File(filePath));
++            // 设置超时时间：连接超时 5 秒，读取超时 10 秒
++            HttpUtil.downloadFile(url, new File(filePath), 10000);
+             return "Resource downloaded successfully to: " + filePath;
+         } catch (Exception e) {
++            log.warn("[资源下载] 下载失败: url={}, error={}", url, e.getMessage());
+             return "Error downloading resource: " + e.getMessage();
+         }
+     }
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+index 42fa120..84d4ec8 100644
+--- a/src/main/resources/application.yml
++++ b/src/main/resources/application.yml
+@@ -32,6 +32,8 @@ spring:
+       chat:
+         options:
+           model: qwen-plus
++        # 添加超时配置（单位：秒）
++        timeout: 60s
+ # 临时注释掉，便于大家开发调试和部署（实际需要启动 MCP 服务）
+ #    mcp:
+ #      client:
+@@ -116,3 +118,6 @@ search-api:
+ logging:
+   level:
+     org.springframework.ai: DEBUG
++    # 开启 Redis 操作日志，观察短期记忆的读写
++    io.lettuce.core: DEBUG
++    org.springframework.data.redis: DEBUG
+diff --git a/src/test/java/com/yupi/yuaiagent/app/LoveAppTest.java b/src/test/java/com/yupi/yuaiagent/app/LoveAppTest.java
+index 970e382..656c5d3 100644
+--- a/src/test/java/com/yupi/yuaiagent/app/LoveAppTest.java
++++ b/src/test/java/com/yupi/yuaiagent/app/LoveAppTest.java
+@@ -2,12 +2,13 @@ package com.yupi.yuaiagent.app;
+ 
+ import com.yupi.yuaiagent.context.UserContext;
+ import jakarta.annotation.Resource;
++import lombok.extern.slf4j.Slf4j;
+ import org.junit.jupiter.api.Assertions;
+ import org.junit.jupiter.api.Test;
+ import org.springframework.boot.test.context.SpringBootTest;
+ 
+ import java.util.UUID;
+-
++@Slf4j
+ @SpringBootTest
+ class LoveAppTest {
+ 
+@@ -32,15 +33,49 @@ class LoveAppTest {
+         UserContext.clear();
+         Assertions.assertNotNull(loveReport);
+     }
++    @Test
++    void testMemoryIsolation() {
++        String chatId1 = UUID.randomUUID().toString();
++        UserContext.setUserId("user_A");
++
++        // 第一轮：告诉系统你的信息
++        loveApp.doChatWithRag("我叫张三，是一名程序员", chatId1);
++
++        // 第二轮：询问个人信息（应该能回答）
++        String answer = loveApp.doChatWithRag("我叫什么？", chatId1);
++        System.out.println(answer); // 应该输出"你是张三"
++
++        // 第三轮：用另一个用户查询（不应该读到张三的信息）
++        UserContext.setUserId("user_B");
++        String chatId2 = UUID.randomUUID().toString();
++        String answer2 = loveApp.doChatWithRag("我叫什么？", chatId2);
++        System.out.println(answer2); // 应该输出"我不知道你的名字"
++    }
++
+ 
+     @Test
+     void doChatWithRag() {
++        // 设置当前用户ID（模拟登录后的用户）
++        String userId = "test_user_" + System.currentTimeMillis();
++        UserContext.setUserId(userId);
++        
++        // 使用唯一的对话ID
+         String chatId = UUID.randomUUID().toString();
+-        UserContext.setUserId("12123");
+-        String message = "我叫什么？";
+-        String answer = loveApp.doChatWithRag(message, chatId);
++        
++        // 第一轮：告诉系统个人信息（触发长期记忆写入）
++        String message1 = "我叫张三，是一名程序员";
++        log.info("[测试] userId={}, 第一轮对话: {}", userId, message1);
++        loveApp.doChatWithRag(message1, chatId);
++        
++        // 第二轮：查询个人记忆（应该从长期记忆中检索）
++        String message2 = "我职业是什么？";
++        log.info("[测试] userId={}, 第二轮对话: {}", userId, message2);
++        String answer = loveApp.doChatWithRag(message2, chatId);
++        
+         UserContext.clear();
+         Assertions.assertNotNull(answer);
++        log.info("[测试] AI回答: {}", answer);
++        System.out.println("AI回答: " + answer);
+     }
+ 
+     @Test
+@@ -60,40 +95,61 @@ class LoveAppTest {
+ 
+         UserContext.clear();
+     }
++
+     @Test
+     void doChatWithTools() {
+-        // 测试联网搜索问题的答案
+-        testMessage("周末想带女朋友去上海约会，推荐几个适合情侣的小众打卡地？");
+-
+-        // 测试网页抓取：恋爱案例分析
+-        testMessage("最近和对象吵架了，看看编程导航网站（codefather.cn）的其他情侣是怎么解决矛盾的？");
+-
+-        // 测试资源下载：图片下载
+-        testMessage("直接下载一张适合做手机壁纸的星空情侣图片为文件");
+-
+-        // 测试终端操作：执行代码
+-        testMessage("执行 Python3 脚本来生成数据分析报告");
+-
+-        // 测试文件操作：保存用户档案
+-        testMessage("保存我的恋爱档案为文件");
+-
+-        // 测试 PDF 生成
+-        testMessage("生成一份‘七夕约会计划’PDF，包含餐厅预订、活动流程和礼物清单");
++//        // 先测试最简单的联网搜索
++//        testMessage("周末想带女朋友去上海约会，推荐几个适合情侣的小众打卡地？");
++
++//        // 测试网页抓取：恋爱案例分析
++//        testMessage("最近和对象吵架了，看看编程导航网站（codefather.cn）的其他情侣是怎么解决矛盾的？");
++//
++//        // 测试资源下载：图片下载（需要先搜索再下载，很耗时）
++//        testMessage("直接下载一张适合做手机壁纸的星空情侣图片为文件");
++//
++//        // 测试终端操作：执行代码
++//        testMessage("执行 Python3 脚本来生成数据分析报告");
++//
++//        // 测试文件操作：保存用户档案
++//        testMessage("保存我的恋爱档案为文件");
++//
++//        // 测试 PDF 生成
++//        testMessage("生成一份‘七夕约会计划’PDF，包含餐厅预订、活动流程和礼物清单");
+     }
+ 
+     private void testMessage(String message) {
++        // 设置当前用户（模拟登录）
++        String userId = "test_user_" + System.currentTimeMillis();
++        UserContext.setUserId(userId);
++        log.info("[测试] 设置 userId={}", userId);
++        
+         String chatId = UUID.randomUUID().toString();
++        log.info("[测试] 开始对话: chatId={}", chatId);
++        
+         String answer = loveApp.doChatWithTools(message, chatId);
+         Assertions.assertNotNull(answer);
++        
++        UserContext.clear();
++        log.info("[测试] 对话结束，清理 UserContext");
+     }
+ 
+     @Test
+     void doChatWithMcp() {
++        // 设置当前用户（模拟登录）
++        String userId = "mcp_test_user_" + System.currentTimeMillis();
++        UserContext.setUserId(userId);
++        log.info("[测试-MCP] 设置 userId={}", userId);
++        
+         String chatId = UUID.randomUUID().toString();
+-         // 测试地图 MCP
++        log.info("[测试-MCP] 开始对话: chatId={}", chatId);
++        
++        // 测试地图 MCP
+         String message = "我的另一半居住在上海静安区，请帮我找到 5 公里内合适的约会地点";
+-        String answer =  loveApp.doChatWithMcp(message, chatId);
++        String answer = loveApp.doChatWithMcp(message, chatId);
+         Assertions.assertNotNull(answer);
++        
++        UserContext.clear();
++        log.info("[测试-MCP] 对话结束，清理 UserContext");
+ //        // 测试图片搜索 MCP
+ //        String message = "帮我搜索一些哄另一半开心的图片，注意，你给我直接图片！！！";
+ //        String answer =  loveApp.doChatWithMcp(message, chatId);

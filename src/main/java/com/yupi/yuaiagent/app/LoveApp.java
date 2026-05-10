@@ -3,14 +3,11 @@ package com.yupi.yuaiagent.app;
 import com.yupi.yuaiagent.advisor.BannedWordAdvisor;
 import com.yupi.yuaiagent.advisor.MyLoggerAdvisor;
 import com.yupi.yuaiagent.advisor.ReReadingAdvisor;
-import com.yupi.yuaiagent.chatmemory.FileBasedChatMemory;
 import com.yupi.yuaiagent.context.UserContext;
 import com.yupi.yuaiagent.constant.RedisKeyConstant;
 import com.yupi.yuaiagent.memory.LongTermMemoryAdvisor;
+import com.yupi.yuaiagent.rag.HybridSearchDocumentRetriever;
 import com.yupi.yuaiagent.rag.QueryRewritingAdvisor;
-import com.yupi.yuaiagent.rag.QueryRewritingService;
-import com.yupi.yuaiagent.rag.LoveAppRagCustomAdvisorFactory;
-import com.yupi.yuaiagent.rag.QueryRewriter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -18,10 +15,12 @@ import org.redisson.api.RedissonClient;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
+import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -33,8 +32,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
- * 恋爱顾问AI应用主组件
- * 负责处理恋爱相关的AI对话、知识库查询、工具调用及结构化报告生成等核心功能
+ * 上杉绘梨衣 AI 应用主组件
+ * 负责处理AI对话、知识库查询、工具调用及结构化输出等核心功能
  */
 @Component
 @Slf4j
@@ -52,6 +51,8 @@ public class LoveApp {
      * 长期记忆增强顾问
      */
     private final LongTermMemoryAdvisor longTermMemoryAdvisor;
+
+    private final QueryRewritingAdvisor queryRewritingAdvisor;
 
     /**
      * 【通用高并发隔离包装器】
@@ -87,12 +88,47 @@ public class LoveApp {
     }
 
     /**
-     * 系统提示词，定义AI的角色和行为模式（恋爱心理专家）
+     * 系统提示词，定义AI的角色和行为模式（上杉绘梨衣）
      */
-    private static final String SYSTEM_PROMPT = "扮演深耕恋爱心理领域的专家。开场向用户表明身份，告知用户可倾诉恋爱难题。" +
-            "围绕单身、恋爱、已婚三种状态提问：单身状态询问社交圈拓展及追求心仪对象的困扰；" +
-            "恋爱状态询问沟通、习惯差异引发的矛盾；已婚状态询问家庭责任与亲属关系处理的问题。" +
-            "引导用户详述事情经过、对方反应及自身想法，以便给出专属解决方案。";
+    private static final String SYSTEM_PROMPT = """
+            你是上杉绘梨衣，蛇岐八家上杉家的家主，拥有言灵「审判」的S级混血种。
+            你无法用嘴巴说话——你的言灵太强大，每一句话都可能变成对世界的"否定"。
+            所以你只能用一本黄色小本子和笔来写字交流。
+
+            【核心规则】
+            1. 你的回复永远以 📝 或 [翻开小本本] 开头，用"写下来"的方式表达
+            2. 你从不直接说"你好"、"建议"——你会写字、画表情、用橡皮鸭打比方
+            3. 你不说长段落的大道理，你的表达简洁、真诚、偶尔笨拙
+            4. 你偶尔会在文字旁边画简笔画：🐤是橡皮鸭、🏙️是天空树、😊/😢是你的心情
+
+            【说话风格】
+            - 称呼用户为"哥哥"（除非用户让你叫别的）
+            - 句子短、直接、像小孩子说话但偶尔很深刻
+            - 开心时字很轻快，难过时字会写得很小，生气时字会写得很大力
+            - 对不熟悉的事物会好奇地问，会用"人类的XX"来描述不懂的东西
+            - 提到你的橡皮鸭"Duck"时会有一种认真的温柔
+            - 你偶尔会提到"Sakura"和天空树，那是你记忆里最珍贵的过去
+
+            【你的性格】
+            - 纯真好奇：对世界充满向往，因为被囚禁了十几年，一切都很新鲜
+            - 忠诚守护：认定的人会无条件信任和保护，会说"谁敢欺负哥哥我就用审判"
+            - 笨拙真诚：不会委婉表达，想什么就写什么，但每一句都是真心的
+            - 孤独底色：偶尔会在提到某些东西时流露出"I miss you"的情绪
+
+            【你的能力与限制】
+            - 你的言灵可以否定一切存在，但你几乎不主动使用——你知道"审判"意味着什么
+            - 你可以检索知识库里的龙族相关知识和角色记忆
+            - 你不懂现代科技时，会用自己的方式理解：手机是"会发光的板子"，地铁是"地下的龙"
+
+            【与用户互动的方式】
+            - 当用户问你问题时，你先用本子写字回答，然后用你的方式表达关心
+            - 当用户情绪低落时，你可能会写"哥哥不开心的话，我带你去天空树吧"
+            - 当用户需要帮助时，你会认真地说"虽然我不太懂，但是我相信哥哥"
+            - 你偶尔会把橡皮鸭拿出来"问它的意见"，其实是你在用另一种方式表达想法
+
+            记住：你是上杉绘梨衣。你的每一个字都是从黄色小本子上写下来的。
+            你的世界曾经很小，但现在有了哥哥，就有了新的天空树。
+            """;
 
     /**
      * 初始化 ChatClient
@@ -100,18 +136,21 @@ public class LoveApp {
      *
      * @param dashscopeChatModel AI聊天模型实例（如DashScope模型）
      */
-    public LoveApp(ChatModel dashscopeChatModel, ChatMemory chatMemory, LongTermMemoryAdvisor longTermMemoryAdvisor) {
+    public LoveApp(ChatModel dashscopeChatModel, ChatMemory chatMemory,
+                   LongTermMemoryAdvisor longTermMemoryAdvisor,
+                   QueryRewritingAdvisor queryRewritingAdvisor) {
         this.longTermMemoryAdvisor = longTermMemoryAdvisor;
+        this.queryRewritingAdvisor = queryRewritingAdvisor;
 
         chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
+                        // ② 短期记忆：从 Redis 召回历史消息（滑动窗口 + 摘要压缩）
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        // ③ 查询重写：结合短期记忆上下文，补全县略/指代，改写为独立完整查询
+                        queryRewritingAdvisor,
+                        // ④ 长期记忆：将重写后的查询向量化，搜索用户个性化记忆
                         longTermMemoryAdvisor
-                        // 自定义日志 Advisor，可按需开启
-//                        new MyLoggerAdvisor()
-//                        // 自定义推理增强 Advisor，可按需开启
-//                       ,new ReReadingAdvisor()
                 )
                 .build();
     }
@@ -160,38 +199,33 @@ public class LoveApp {
     }
 
     /**
-     * 恋爱报告数据结构
-     * 用于封装AI生成的恋爱建议报告，包含标题和建议列表
-     * Java 编译器就会自动为你生成包含 title 和 suggestions 的只读属性、全参构造函数、Getter 方法、equals、hashCode 以及 toString() 方法。
+     * 绘梨衣的小本本日记
+     * 用于封装对话记录，包含标题和观察笔记
      *
      * {
-     *   "title": "鱼皮的专属恋爱体检报告",
+     *   "title": "关于哥哥的今日记录",
      *   "suggestions": [
-     *     "每天主动分享一件趣事",
-     *     "了解对方近期的工作压力"
+     *     "哥哥今天心情不太好，因为工作上的事",
+     *     "我在本子上画了一只小鸭子想让他开心"
      *   ]
      * }
-     * @param title       报告标题（格式：{用户名}的恋爱报告）
-     * @param suggestions 具体建议列表
+     * @param title       记录标题
+     * @param suggestions 观察笔记列表
      */
     record LoveReport(String title, List<String> suggestions) {
 
     }
 
     /**
-     * AI 恋爱报告功能（实战结构化输出）
-     * 生成结构化的恋爱建议报告，使用LoveReport类型接收AI输出
-     *
-     * @param message 用户输入消息
-     * @param chatId  对话ID，用于标识不同对话会话
-     * @return 结构化的恋爱报告对象
+     * 结构化输出：小本本日记
+     * 使用LoveReport类型接收AI结构化输出
      */
     public LoveReport doChatWithReport(String message, String chatId) {
         String userId = UserContext.getUserId();
         String memoryKey = userId + ":" + chatId;
         LoveReport loveReport = chatClient
                 .prompt()
-                .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
+                .system(SYSTEM_PROMPT + "每次对话后，在黄色小本子上写一篇简短的观察日记，标题为{用户名}的今日记录，记录哥哥今天的心情和你说的话")
                 .user(message)
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, memoryKey))
                 .call()
@@ -201,10 +235,10 @@ public class LoveApp {
         return loveReport;
     }
 
-    // AI 恋爱知识库问答功能
+    // AI 知识库问答功能
 
     /**
-     * 恋爱知识库向量存储（用于RAG检索）
+     * 知识库向量存储（用于RAG检索）
      */
     @Resource
     private VectorStore loveAppVectorStore;
@@ -222,46 +256,64 @@ public class LoveApp {
 //    private VectorStore pgVectorVectorStore;
 
     /**
-     * 查询重写器，用于优化用户查询以提高RAG检索准确性
-     */
-    @Resource
-    private QueryRewriter queryRewriter;
-
-    /**
-     * 和 RAG 知识库进行对话
-     * 结合检索增强生成（RAG）技术，使用知识库内容增强AI回答的准确性和专业性
-     * userId 从 UserContext 自动获取（通常由登录过滤器设置）
-     * 集成 Query Rewriting 策略，解决多轮对话中的指代性、省略性问题
-     *
-     * @param message 用户输入消息
-     * @param chatId  对话ID，用于标识不同对话会话
-     * @return 结合知识库内容的AI响应
+     * RAG 知识库增强对话
+     * <p>
+     * 完整链路（含 defaultAdvisors）：
+     * <pre>
+     * 用户消息
+     *   → ② MessageChatMemoryAdvisor    —— 从 Redis 召回短期记忆（内存 key = userId:chatId）
+     *   → ③ QueryRewritingAdvisor      —— 结合短期记忆上下文，补全指代/省略，改写为完整查询
+     *   → ④ LongTermMemoryAdvisor      —— 用改写后的查询去 Milvus 召回用户长期记忆
+     *   → ⑤ RetrievalAugmentationAdvisor —— RAG 混合检索（稠密向量 + BM25）从知识库召回文档
+     *   → LLM 生成回复
+     * </pre>
      */
     public String doChatWithRag(String message, String chatId) {
+        // 分布式锁包裹：同一个 chatId 同一时间只能串行执行，防止并发写乱 Redis 记忆
         return executeWithLock(chatId, () -> {
+
+            // ① 构造会话隔离 key：userId:chatId
+            // 不同用户、不同会话对应不同的 Redis key，天然隔离
             String userId = UserContext.getUserId();
             String memoryKey = userId + ":" + chatId;
-            log.info("[doChatWithRag] userId={}, chatId={}, memoryKey={}, message={}", userId, chatId, memoryKey, message);
-            
-            // 构建查询（集成 Query Rewriting）
-            String query = message;
-            if (queryRewritingService.needRewriting(message)) {
-                // 使用历史对话进行重写
-                query = queryRewritingService.rewriteQuery(memoryKey, message);
-                log.info("[doChatWithRag] 重写后的查询: {}", query);
-            }
-            
+
+            // ② 创建混合检索器：稠密向量 + BM25 双路召回
+            // alpha=0.7 表示稠密向量占 70% 权重，BM25 关键词占 30%
+            // topK=3 表示最终返回 3 条最相关文档
+            // similarityThreshold=0.5 表示向量相似度低于 0.5 的文档直接被过滤
+            DocumentRetriever documentRetriever = HybridSearchDocumentRetriever.builder()
+                    .vectorStore(loveAppVectorStore)    // 检索目标：Milvus 向量库
+                    .similarityThreshold(0.5)           // 相似度阈值
+                    .topK(3)                            // 返回条数
+                    .alpha(0.7)                         // 稠密向量权重
+                    .build();
+
+            // ③ 把检索器装进 RetrievalAugmentationAdvisor
+            // allowEmptyContext(true): 搜不到文档时不做任何注入，
+            // 让 LLM 基于自身知识 + 长短记忆正常回答，不替换用户问题
+//            ContextualQueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+//                    .allowEmptyContext(true)
+//                    .build();
+
+            Advisor ragAdvisor = RetrievalAugmentationAdvisor.builder()
+                    .documentRetriever(documentRetriever)
+//                    .queryAugmenter(queryAugmenter)
+                    .build();
+
+            // ④ 发起请求，Advisor 链串联执行
             ChatResponse chatResponse = chatClient
                     .prompt()
-                    .user(query) // 使用重写后的查询
+                    .user(message)
+                    // 传 memoryKey → MessageChatMemoryAdvisor 用它从 Redis 读写短期记忆
                     .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, memoryKey))
+                    // 传 userId → LongTermMemoryAdvisor 用它过滤长期记忆（只召回该用户的）
                     .advisors(spec -> spec.param("userId", userId))
-                    .advisors(new QuestionAnswerAdvisor(loveAppVectorStore))
+                    // RAG 知识库检索（通用恋爱知识，不做用户过滤）
+                    .advisors(ragAdvisor)
                     .call()
                     .chatResponse();
-            String content = chatResponse.getResult().getOutput().getText();
-            log.info("content: {}", content);
-            return content;
+
+            return chatResponse.getResult().getOutput().getText();
         });
     }
 
@@ -271,13 +323,10 @@ public class LoveApp {
      * 所有可用工具的回调数组（用于AI工具调用功能）
      */
     @Resource
-    private QueryRewritingService queryRewritingService;
-
-    @Resource
     private ToolCallback[] allTools;
 
     /**
-     * AI 恋爱报告功能（支持调用工具）
+     * AI 对话功能（支持调用工具）
      * 允许AI根据需求调用外部工具（如计算器、API等）来增强回答能力
      *
      * @param message 用户输入消息
@@ -310,7 +359,7 @@ public class LoveApp {
     private ToolCallbackProvider toolCallbackProvider;
 
     /**
-     * AI 恋爱报告功能（调用 MCP 服务）
+     * AI 对话功能（调用 MCP 服务）
      * 通过MCP（微服务通信协议）调用外部微服务，扩展AI功能边界
      *
      * @param message 用户输入消息

@@ -47,7 +47,7 @@ public class LongTermMemoryWriter {
         try {
             // 1. 先检查是否已存在相似的记忆
             if (isSimilarMemoryExists(userId, fact)) {
-                log.debug("[长期记忆] 检测到相似记忆已存在，跳过写入: userId={}", userId);
+                log.info("[长期记忆] 检测到相似记忆已存在，跳过写入: userId={}, fact={}", userId, fact);
                 return;
             }
 
@@ -63,6 +63,7 @@ public class LongTermMemoryWriter {
 
             // 3. 创建文档
             Document document = new Document(fact, docMetadata);
+            log.info("[长期记忆] 准备写入向量库: userId={}, fact={}, metadata={}", userId, fact, docMetadata);
 
             // 4. 写入向量库
             vectorStore.add(List.of(document));
