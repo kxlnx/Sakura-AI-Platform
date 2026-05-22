@@ -323,6 +323,50 @@ sakura:
 
 **元数据增强**（archived）：`MyKeywordEnricher` 可在入库时调用 LLM 为每段文档自动提取 5 个关键词写入元数据，检索时用关键词兜底降低漏检率。数据量较小时推荐搭配语义分片一起开启，代价是入库速度显著变慢（每段都需调 LLM + Embedding）。
 
+### 6. AI Code Review（自动化代码审查）
+
+基于 Claude CLI + `git diff` 的本地 AI 代码审查流水线，无需 CI/CD 环境。
+
+```
+工作流:
+  git diff main...HEAD → 保存 diff 文件 → Claude CLI 逐文件审查 → 输出结构化报告
+```
+
+**核心文件**：
+
+| 文件 | 作用 |
+|------|------|
+| `CLAUDE.md` | 审查规则定义：触发词（review/CR）、审查方向（质量/安全/性能/并发/逻辑）、输出模板 |
+| `src/main/resources/prompts/alc-review-prompt.md` | AI 提示词模板：评审角色、严重程度分类、5 大评审方向 |
+| `scripts/alc-review.bat` | Windows 端一键启动脚本，自动生成 `git diff` 并保存到 `scripts/review_temp.diff` |
+| `scripts/alc-review.sh` | Mac/Linux 端一键脚本 |
+
+**审查报告模板**：
+
+```markdown
+# AI CodeReview 报告
+
+## 评审概览
+- 评审文件数 / Critical / Warning / Info 统计
+
+## Critical 问题（必须修复）
+| 文件 | 问题描述 | 影响 | 修复建议 |
+
+## Warning 问题（建议修复）
+| 文件 | 问题描述 | 严重程度 | 修复建议 |
+
+## Info 优化建议
+| 文件 | 当前代码 | 优化建议 |
+
+## 总结
+```
+
+**使用方式**：在 IDE 中对 Claude CLI 说 "review" 或 "代码审查"，自动对比 `main...HEAD` 的变更并逐文件审查输出报告。也可指定基准分支如 "对比 dev 分支 review"。
+
+### 7. 单元测试
+
+单元测试覆盖主要工具类和 Agent 核心逻辑（`src/test/java/` 下共 16 个测试类），由于文件路径重构后部分测试文件中的资源引用丢失，需要根据当前目录结构恢复。
+
 ## 项目结构
 
 ```
