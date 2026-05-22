@@ -21,14 +21,23 @@ import java.nio.file.Paths;
 @Slf4j
 public class PDFGenerationTool {
 
-    @Tool(description = "Generate a PDF file with given content", returnDirect = false)
+    @Tool(description = """
+            Generate a PDF file and save it to the server.
+            Use this tool when: user explicitly asks to create, generate, or export a PDF document.
+            Do NOT use for: general chat, answering questions, search, or any task that doesn't involve creating a PDF.
+            fileName: must end with .pdf, use English names (e.g. report.pdf, summary.pdf).
+            content: the complete text to include in the PDF, based on real information.
+            """, returnDirect = false)
     public String generatePDF(
             @ToolParam(description = "Name of the file to save the generated PDF") String fileName,
             @ToolParam(description = "Content to be included in the PDF") String content) {
-        // 清理内容中的特殊字符，避免 JSON 解析失败
+        // 清理内容：统一换行符 + 过滤中文缺字的特殊符号
         if (content != null) {
-            content = content.replace("\r\n", "\n")  // 统一换行符
-                           .replace("\r", "\n");
+            content = content.replace("\r\n", "\n")
+                           .replace("\r", "\n")
+                           .replaceAll("[^\\u0000-\\uFFFF]", "")       // 非 BMP（emoji）
+                           .replaceAll("[^\\u4e00-\\u9fa5\\u3000-\\u303f\\uff00-\\uffef"  // 保留: CJK+标点+全角
+                                     + "a-zA-Z0-9\\s,.!?;:'\"()\\[\\]{}<>/@#$%^&*+=_|~`\\\\-]", "");
         }
         
         String fileDir = FileConstant.FILE_SAVE_DIR + "/pdf";

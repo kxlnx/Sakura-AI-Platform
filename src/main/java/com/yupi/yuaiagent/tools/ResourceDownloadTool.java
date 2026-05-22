@@ -16,7 +16,13 @@ import java.io.File;
 @Slf4j
 public class ResourceDownloadTool {
 
-    @Tool(description = "Download a resource from a given URL")
+    @Tool(description = """
+            Download a file from a URL and save it to the server.
+            Use this tool when: user asks to download a specific file or resource from the internet.
+            Do NOT use for: searching (use searchWeb), scraping web pages (use scrapeWebPage), images (use searchImage).
+            url: must be a real, valid URL starting with http:// or https://
+            fileName: save with an appropriate extension (e.g. document.pdf, image.jpg).
+            """)
     public String downloadResource(@ToolParam(description = "URL of the resource to download") String url, @ToolParam(description = "Name of the file to save the downloaded resource") String fileName) {
         String fileDir = FileConstant.FILE_SAVE_DIR + "/download";
         String filePath = fileDir + "/" + fileName;

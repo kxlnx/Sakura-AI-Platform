@@ -2,9 +2,7 @@ package com.yupi.yuaiagent.enums;
 
 import lombok.Getter;
 /**
- * JDos注释：
- * 消息角色类型枚举，原RoleType，现独立为MessageTypeEnum。
- * 用于区分system、user、assistant三种消息角色。
+ * 消息角色类型枚举，区分 system / user / assistant 三种角色
  */
 @Getter
 public enum MessageTypeEnum {

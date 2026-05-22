@@ -1,5 +1,6 @@
 package com.yupi.yuaiagent.memory.service;
 
+import com.yupi.yuaiagent.rag.KeywordExtractor;
 import io.milvus.grpc.SearchResults;
 import io.milvus.param.R;
 import io.milvus.param.dml.QueryParam;
@@ -128,43 +129,14 @@ public class MilvusHybridSearchService {
     /**
      * 提取查询关键词
      */
+    private static final String[] KEYWORD_PRESETS = {
+        "苹果", "水果", "工作", "职业", "公司", "名字", "生日", "年龄",
+        "颜色", "爱好", "兴趣", "运动", "音乐", "电影", "食物", "地方",
+        "喜欢", "讨厌", "记得", "之前", "偏好"
+    };
+
     private List<String> extractKeywords(String query) {
-        List<String> keywords = new ArrayList<>();
-
-        // 预设的关键词列表
-        String[] presets = {"苹果", "水果", "工作", "职业", "公司", "名字", "生日", "年龄",
-                "颜色", "爱好", "兴趣", "运动", "音乐", "电影", "食物", "地方",
-                "喜欢", "讨厌", "记得", "之前", "偏好"};
-
-        for (String preset : presets) {
-            if (query.contains(preset)) {
-                keywords.add(preset);
-            }
-        }
-
-        // 从查询中提取连续的中文字符作为关键词
-        StringBuilder sb = new StringBuilder();
-        for (char c : query.toCharArray()) {
-            if (Character.UnicodeBlock.of(c) == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS) {
-                sb.append(c);
-            } else {
-                if (sb.length() >= 2) {
-                    String word = sb.toString();
-                    if (!keywords.contains(word)) {
-                        keywords.add(word);
-                    }
-                }
-                sb.setLength(0);
-            }
-        }
-        if (sb.length() >= 2) {
-            String word = sb.toString();
-            if (!keywords.contains(word)) {
-                keywords.add(word);
-            }
-        }
-
-        return keywords.stream().limit(10).toList();
+        return KeywordExtractor.extract(query, KEYWORD_PRESETS);
     }
 
     /**

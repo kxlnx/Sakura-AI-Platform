@@ -36,11 +36,11 @@ class LongTermMemoryTest {
         UserContext.setUserId(userId);
 
         String msg1 = "我最近和女朋友吵架了，很不开心";
-        String reply1 = loveApp.doChat(msg1, chatId);
+        String reply1 = loveApp.doChat(msg1, chatId, userId);
         Assertions.assertNotNull(reply1, "AI 应该返回回复");
 
         String msg2 = "她说我不关心她";
-        String reply2 = loveApp.doChat(msg2, chatId);
+        String reply2 = loveApp.doChat(msg2, chatId, userId);
         Assertions.assertNotNull(reply2, "AI 应该返回回复");
 
         String redisKey = "chat:memory:" + userId + ":" + chatId;
@@ -208,16 +208,16 @@ class LongTermMemoryTest {
         UserContext.setUserId(userId);
 
         String msg1 = "我最近和女朋友吵架了";
-        String reply1 = loveApp.doChat(msg1, chatId);
+        String reply1 = loveApp.doChat(msg1, chatId, userId);
 
         String msg2 = "请记住我喜欢吃苹果，还有我是程序员";
-        String reply2 = loveApp.doChatWithRag(msg2, chatId);
+        String reply2 = loveApp.doChatWithRag(msg2, chatId, userId);
 
         String msg3 = "我之前跟你说过我喜欢什么？还有我是做什么工作的？";
-        String reply3 = loveApp.doChatWithRag(msg3, chatId);
+        String reply3 = loveApp.doChatWithRag(msg3, chatId, userId);
 
         String msg4 = "那你能给我一些恋爱建议吗？";
-        String reply4 = loveApp.doChatWithRag(msg4, chatId);
+        String reply4 = loveApp.doChatWithRag(msg4, chatId, userId);
 
         String redisKey = "chat:memory:" + userId + ":" + chatId;
         Long size = stringRedisTemplate.opsForList().size(redisKey);

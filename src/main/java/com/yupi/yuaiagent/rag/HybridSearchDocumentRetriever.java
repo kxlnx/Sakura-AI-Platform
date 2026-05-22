@@ -24,18 +24,24 @@ public class HybridSearchDocumentRetriever implements DocumentRetriever {
     private final int topK;
     private final double alpha;
 
-    private static final double BM25_K1 = 1.5;
-    private static final double BM25_B = 0.75;
-    private static final int AVG_DOC_LENGTH = 100;
+    private final double bm25K1;
+    private final double bm25B;
+    private final int avgDocLength;
 
     public HybridSearchDocumentRetriever(VectorStore vectorStore,
                                          double similarityThreshold,
                                          int topK,
-                                         double alpha) {
+                                         double alpha,
+                                         double bm25K1,
+                                         double bm25B,
+                                         int avgDocLength) {
         this.vectorStore = vectorStore;
         this.similarityThreshold = similarityThreshold;
         this.topK = topK;
         this.alpha = alpha;
+        this.bm25K1 = bm25K1;
+        this.bm25B = bm25B;
+        this.avgDocLength = avgDocLength;
     }
 
     public static Builder builder() {
@@ -83,33 +89,7 @@ public class HybridSearchDocumentRetriever implements DocumentRetriever {
      * 提取查询中的关键词
      */
     private List<String> extractKeywords(String query) {
-        List<String> keywords = new ArrayList<>();
-
-        // 中文分词：提取连续汉字作为候选词
-        StringBuilder sb = new StringBuilder();
-        for (char c : query.toCharArray()) {
-            if (Character.isIdeographic(c)) {
-                sb.append(c);
-            } else {
-                if (sb.length() >= 2) {
-                    keywords.add(sb.toString());
-                }
-                sb.setLength(0);
-            }
-        }
-        if (sb.length() >= 2) {
-            keywords.add(sb.toString());
-        }
-
-        // 英文/数字词
-        for (String part : query.split("[\\s,，。！？?、]+")) {
-            part = part.trim().toLowerCase();
-            if (part.length() >= 2 && !part.matches("^[哪谁什么怎为啥的了吗呢啊吧嘛]+$")) {
-                keywords.add(part);
-            }
-        }
-
-        return keywords.stream().distinct().limit(10).collect(Collectors.toList());
+        return KeywordExtractor.extract(query);
     }
 
     /**
@@ -139,7 +119,7 @@ public class HybridSearchDocumentRetriever implements DocumentRetriever {
             int tf = countOccurrences(text, keyword);
             if (tf > 0) {
                 double idf = 1.0; // 简化：假设所有词中等常见
-                score += idf * (tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * dl / AVG_DOC_LENGTH));
+                score += idf * (tf * (bm25K1 + 1)) / (tf + bm25K1 * (1 - bm25B + bm25B * dl / avgDocLength));
             }
         }
         return score;
@@ -219,15 +199,21 @@ public class HybridSearchDocumentRetriever implements DocumentRetriever {
         private double similarityThreshold = 0.5;
         private int topK = 3;
         private double alpha = 0.7;
+        private double bm25K1 = 1.5;
+        private double bm25B = 0.75;
+        private int avgDocLength = 100;
 
-        public Builder vectorStore(VectorStore vectorStore) { this.vectorStore = vectorStore; return this; }
+        public Builder vectorStore(VectorStore v) { this.vectorStore = v; return this; }
         public Builder similarityThreshold(double t) { this.similarityThreshold = t; return this; }
         public Builder topK(int k) { this.topK = k; return this; }
         public Builder alpha(double a) { this.alpha = a; return this; }
+        public Builder bm25K1(double k) { this.bm25K1 = k; return this; }
+        public Builder bm25B(double b) { this.bm25B = b; return this; }
+        public Builder avgDocLength(int l) { this.avgDocLength = l; return this; }
 
         public HybridSearchDocumentRetriever build() {
             if (vectorStore == null) throw new IllegalStateException("vectorStore is required");
-            return new HybridSearchDocumentRetriever(vectorStore, similarityThreshold, topK, alpha);
+            return new HybridSearchDocumentRetriever(vectorStore, similarityThreshold, topK, alpha, bm25K1, bm25B, avgDocLength);
         }
     }
 }

@@ -25,8 +25,9 @@ public class MilvusRestConfig {
         return new RestTemplate();
     }
 
+    private static final int MILVUS_HTTP_PORT_OFFSET = 14;
+
     public String getMilvusUri() {
-        // Milvus REST API 地址
-        return "http://" + host + ":" + (port + 14); // HTTP 端口 = gRPC 端口 + 14
+        return "http://" + host + ":" + (port + MILVUS_HTTP_PORT_OFFSET);
     }
 }

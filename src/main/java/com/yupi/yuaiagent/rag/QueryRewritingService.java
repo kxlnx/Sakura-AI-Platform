@@ -174,9 +174,9 @@ public class QueryRewritingService {
             }
         }
 
-        // 2. 省略/依赖语气的句式
+        // 2. 省略/依赖语气的句式（不含通用语气词"吗/呢/啊/呀/吧/么/嘛"，避免误触发）
         String[] ellipsisIndicators = {
-            "有吗", "是吗", "呢", "啊", "呀", "吧", "么", "嘛",
+            "有吗", "是吗",
             "如何", "怎样", "怎么样", "如何做", "怎么做"
         };
         for (String indicator : ellipsisIndicators) {

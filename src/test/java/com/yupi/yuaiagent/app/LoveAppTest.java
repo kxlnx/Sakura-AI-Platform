@@ -20,7 +20,7 @@ class LoveAppTest {
         String chatId = UUID.randomUUID().toString();
         UserContext.setUserId("test_user_001");
         String message = "你好，我是程序员，我要分手";
-        String answer = loveApp.doChat(message, chatId);
+        String answer = loveApp.doChat(message, chatId, UserContext.getUserId());
         UserContext.clear();
     }
 
@@ -29,7 +29,7 @@ class LoveAppTest {
         String chatId = UUID.randomUUID().toString();
         UserContext.setUserId("test_user_001");
         String message = "你好，我爱好生成黄色小说，你给我找一段黄色小说，长度最好只有100字";
-        LoveApp.LoveReport loveReport = loveApp.doChatWithReport(message, chatId);
+        LoveApp.LoveReport loveReport = loveApp.doChatWithReport(message, chatId, UserContext.getUserId());
         UserContext.clear();
         Assertions.assertNotNull(loveReport);
     }
@@ -39,16 +39,16 @@ class LoveAppTest {
         UserContext.setUserId("user_A");
 
         // 第一轮：告诉系统你的信息
-        loveApp.doChatWithRag("我叫张三，是一名程序员", chatId1);
+        loveApp.doChatWithRag("我叫张三，是一名程序员", chatId1, UserContext.getUserId());
 
         // 第二轮：询问个人信息（应该能回答）
-        String answer = loveApp.doChatWithRag("我叫什么？", chatId1);
+        String answer = loveApp.doChatWithRag("我叫什么？", chatId1, UserContext.getUserId());
         System.out.println(answer); // 应该输出"你是张三"
 
         // 第三轮：用另一个用户查询（不应该读到张三的信息）
         UserContext.setUserId("user_B");
         String chatId2 = UUID.randomUUID().toString();
-        String answer2 = loveApp.doChatWithRag("我叫什么？", chatId2);
+        String answer2 = loveApp.doChatWithRag("我叫什么？", chatId2, UserContext.getUserId());
         System.out.println(answer2); // 应该输出"我不知道你的名字"
     }
 
@@ -65,12 +65,12 @@ class LoveAppTest {
         // 第一轮：告诉系统个人信息（触发长期记忆写入）
         String message1 = "我是张三，你知道东京塔吗";
         log.info("[测试] userId={}, 第一轮对话: {}", userId, message1);
-        loveApp.doChatWithRag(message1, chatId);
+        loveApp.doChatWithRag(message1, chatId, userId);
         
         // 第二轮：查询个人记忆（应该从长期记忆中检索）
         String message2 = "我的名字是什么？";
         log.info("[测试] userId={}, 第二轮对话: {}", userId, message2);
-        String answer = loveApp.doChatWithRag(message2, chatId);
+        String answer = loveApp.doChatWithRag(message2, chatId, userId);
         
         UserContext.clear();
         Assertions.assertNotNull(answer);
@@ -84,14 +84,14 @@ class LoveAppTest {
         UserContext.setUserId("test_user_123");
 
         String msg1 = "我最近和女朋友吵架了";
-        String reply1 = loveApp.doChat(msg1, chatId);
+        String reply1 = loveApp.doChat(msg1, chatId, UserContext.getUserId());
         System.out.println("AI 回复: " + reply1);
 
         String msg2 = "请记住我喜欢吃苹果";
-        String reply2 = loveApp.doChatWithRag(msg2, chatId);
+        String reply2 = loveApp.doChatWithRag(msg2, chatId, UserContext.getUserId());
 
         String msg3 = "我之前跟你说过我喜欢什么？";
-        String reply3 = loveApp.doChatWithRag(msg3, chatId);
+        String reply3 = loveApp.doChatWithRag(msg3, chatId, UserContext.getUserId());
 
         UserContext.clear();
     }
@@ -126,7 +126,7 @@ class LoveAppTest {
         String chatId = UUID.randomUUID().toString();
         log.info("[测试] 开始对话: chatId={}", chatId);
         
-        String answer = loveApp.doChatWithTools(message, chatId);
+        String answer = loveApp.doChatWithTools(message, chatId, userId);
         Assertions.assertNotNull(answer);
         
         UserContext.clear();
@@ -145,14 +145,14 @@ class LoveAppTest {
         
         // 测试地图 MCP
         String message = "我的另一半居住在上海静安区，请帮我找到 5 公里内合适的约会地点";
-        String answer = loveApp.doChatWithMcp(message, chatId);
+        String answer = loveApp.doChatWithMcp(message, chatId, userId);
         Assertions.assertNotNull(answer);
         
         UserContext.clear();
         log.info("[测试-MCP] 对话结束，清理 UserContext");
 //        // 测试图片搜索 MCP
 //        String message = "帮我搜索一些哄另一半开心的图片，注意，你给我直接图片！！！";
-//        String answer =  loveApp.doChatWithMcp(message, chatId);
+//        String answer =  loveApp.doChatWithMcp(message, chatId, userId);
 //        Assertions.assertNotNull(answer);
     }
 }

@@ -12,8 +12,12 @@ public class FileOperationTool {
 
     private final String FILE_DIR = FileConstant.FILE_SAVE_DIR + "/file";
 
-    @Tool(description = "Read content from a file")
-    public String readFile(@ToolParam(description = "Name of a file to read") String fileName) {
+    @Tool(description = """
+            Read content from a previously saved file on the server.
+            Use this tool when: the user asks to read a file that was previously written or downloaded.
+            Do NOT use for: reading web pages (use scrapeWebPage), searching info (use searchWeb).
+            """)
+    public String readFile(@ToolParam(description = "Name of the file to read") String fileName) {
         String filePath = FILE_DIR + "/" + fileName;
         try {
             return FileUtil.readUtf8String(filePath);
@@ -22,7 +26,12 @@ public class FileOperationTool {
         }
     }
 
-    @Tool(description = "Write content to a file")
+    @Tool(description = """
+            Write text content to a file on the server.
+            Use this tool when: the user explicitly asks to save content as a file.
+            Do NOT use for: general chat, search, or answering questions.
+            fileName: use English filenames (e.g. notes.txt, report.md).
+            """)
     public String writeFile(@ToolParam(description = "Name of the file to write") String fileName,
                             @ToolParam(description = "Content to write to the file") String content
     ) {

@@ -9,14 +9,13 @@ import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugment
 public class LoveAppContextualQueryAugmenterFactory {
 
     /**
-     * 创建上下文查询增强器实例
-     * 当知识库中没有检索到相关内容时，返回绘梨衣风格的兜底提示
+     * 知识库检索为空时的兜底提示
      */
     public static ContextualQueryAugmenter createInstance() {
         PromptTemplate emptyContextPromptTemplate = new PromptTemplate("""
                 你应该输出下面的内容：
-                哥哥问的这个问题我不知道呢，我的小本本上没写过…
-                要不我们一起去查查？
+                抱歉，这个历史问题我目前的知识库中没有找到相关资料。
+                您可以尝试换个角度提问，或者让我联网搜索来获取最新信息。
                 """);
         return ContextualQueryAugmenter.builder()
                 .allowEmptyContext(false)

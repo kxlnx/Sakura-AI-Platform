@@ -2,7 +2,12 @@ package com.yupi.yuaiagent.agent;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import com.yupi.yuaiagent.agent.model.AgentState;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+
+import java.util.List;
 
 /**
  * ReAct (Reasoning and Acting) 模式的代理抽象类
@@ -13,39 +18,43 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class ReActAgent extends BaseAgent {
 
-    /**
-     * 处理当前状态并决定下一步行动
-     *
-     * @return 是否需要执行行动，true表示需要执行，false表示不需要执行
-     */
     public abstract boolean think();
-
-    /**
-     * 执行决定的行动
-     *
-     * @return 行动执行结果
-     */
     public abstract String act();
 
-    /**
-     * 执行单个步骤：思考和行动
-     *
-     * @return 步骤执行结果
-     */
     @Override
     public String step() {
         try {
-            // 先思考
             boolean shouldAct = think();
-            if (!shouldAct) {
-                return "思考完成 - 无需行动";
+
+            // 取 LLM 文字回复
+            String text = "";
+            List<Message> msgList = getMessageList();
+            for (int i = msgList.size() - 1; i >= 0; i--) {
+                if (msgList.get(i) instanceof AssistantMessage) {
+                    String t = ((AssistantMessage) msgList.get(i)).getText();
+                    if (t != null && !t.isBlank() && !t.equals("doTerminate")) {
+                        text = t;
+                        break;
+                    }
+                }
             }
-            // 再行动
-            return act();
+
+            // 需要调工具 → 返回 LLM 思考文字给前端，工具结果仅作 LLM 上下文不对外展示
+            if (shouldAct) {
+                String result = text.isEmpty() ? "⚙️ 正在处理..." : text;
+                act();
+                return result;
+            }
+
+            // 没调工具 + 有文字 → 最终回复，终止
+            if (!text.isBlank() && getState() != AgentState.FINISHED) {
+                setState(AgentState.FINISHED);
+            }
+            return text;
         } catch (Exception e) {
-            // 记录异常日志
-            e.printStackTrace();
-            return "步骤执行失败：" + e.getMessage();
+            log.error("步骤执行失败", e);
+            setState(AgentState.FINISHED);
+            return "";
         }
     }
 

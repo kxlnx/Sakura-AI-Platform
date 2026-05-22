@@ -1,5 +1,6 @@
 package com.yupi.yuaiagent.rag;
 
+import com.yupi.yuaiagent.context.UserContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -9,6 +10,7 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -39,7 +41,7 @@ public class QueryRewritingAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public int getOrder() {
-        return 0;
+        return -200; // 必须在 RAG Advisor 之前执行，否则 RAG 的空上下文兜底会替换用户消息
     }
 
     @Override
@@ -49,12 +51,13 @@ public class QueryRewritingAdvisor implements CallAdvisor, StreamAdvisor {
             if (conversationId != null) {
                 List<UserMessage> userMessages = request.prompt().getUserMessages();
                 if (userMessages != null && !userMessages.isEmpty()) {
-                    String currentMessage = userMessages.get(0).getText();
+                    // 取最后一条 UserMessage（当前问题），第一条可能是历史消息
+                    String currentMessage = userMessages.get(userMessages.size() - 1).getText();
                     if (currentMessage != null && !currentMessage.trim().isEmpty()) {
                         // 提取 userId：优先 request context，其次 UserContext
                         String userId = (String) request.context().get("userId");
                         if (userId == null) {
-                            userId = com.yupi.yuaiagent.context.UserContext.getUserId();
+                            userId = UserContext.getUserId();
                         }
                         if (userId == null) {
                             userId = "default_user";
@@ -65,7 +68,7 @@ public class QueryRewritingAdvisor implements CallAdvisor, StreamAdvisor {
                             String rewrittenQuery = queryRewritingService.rewriteQuery(conversationId, currentMessage);
                             log.info("[QueryRewritingAdvisor] 重写查询: {} -> {}", currentMessage, rewrittenQuery);
 
-                            org.springframework.ai.chat.prompt.Prompt newPrompt = request.prompt().augmentUserMessage(rewrittenQuery);
+                            Prompt newPrompt = request.prompt().augmentUserMessage(rewrittenQuery);
                             request = new ChatClientRequest(newPrompt, request.context());
                         }
                     }

@@ -1,0 +1,173 @@
+# ============================
+# 使用方法：复制此文件为 application.yml，填入你的真实密钥
+# cp application-template.yml application.yml
+# ============================
+
+spring:
+  application:
+    name: sakura-agent
+  profiles:
+    active: local
+  data:
+    redis:
+      host: 127.0.0.1      # Redis 服务器地址 (本地为 127.0.0.1)
+      port: 6379           # Redis 端口号 (默认 6379)
+#      password:            # Redis 密码（无密码留空）
+      database: 0          # 默认使用 0 号库
+      timeout: 2000ms      # 单次操作超时，快速失败
+      lettuce:
+        pool:
+          max-active: 20   # 最大连接数
+          max-wait: 1000ms # 连接池耗尽最多等 1s，避免线程卡死
+          max-idle: 10
+          min-idle: 5      # 预热 5 个连接，减少冷启动延迟
+  datasource:
+#    url: jdbc:postgresql://pgm-bp1osy9424y2g39vxo.pg.rds.aliyuncs.com:5432/yu_ai_agent
+#    username: Action_Squad
+#    password: Zx777111!
+#    driver-class-name: org.postgresql.Driver
+    url: jdbc:mysql://127.0.0.1:3306/sakura_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 你的MySQL密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  ai:
+    dashscope:
+      # 需要替换为你自己的 key
+      api-key: 你的DashScope密钥
+      chat:
+        options:
+          model: qwen-plus
+        # 添加超时配置（单位：秒）
+        timeout: 60s
+# 临时注释掉，便于大家开发调试和部署（实际需要启动 MCP 服务）
+#    mcp:
+#      client:
+#        sse:
+#          connections:
+#            server1:
+#              url: http://localhost:8127
+#        stdio:
+#          servers-configuration: classpath:mcp-servers.json
+# 临时注释掉，便于大家开发调试和部署（实际需要启动 PgVector 数据库）
+#    vectorstore:
+#      pgvector:
+#        index-type: HNSW
+#        dimensions: 1536
+#        distance-type: COSINE_DISTANCE
+#        max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
+    vectorstore:
+      milvus:
+        client:
+          host: localhost      # 你的 Milvus 运行地址 (如果是 Docker 就是 localhost)
+          port: 19530          # Milvus 默认的 gRPC 通信端口
+        # 核心表结构配置
+        collection-name: love_master_knowledge  # 集合名称 (表名)
+        embedding-dimension: 1536               # 向量维度 (非常关键！)
+        index-type: HNSW                        # 索引算法
+        metric-type: COSINE                     # 距离度量算法
+        initialize-schema: true                 # 允许 Spring 自动建表
+# Redisson 配置
+redisson:
+  threads: 16
+  nettyThreads: 32
+  single-server-config:
+    address: "redis://127.0.0.1:6379"
+#    password:              # 明确设置为空，无密码认证
+    database: 0
+    connection-minimum-idle-size: 5
+    connection-pool-size: 10
+mybatis-plus:
+  configuration:
+    # MyBatis 配置
+    map-underscore-to-camel-case: false
+    # 仅在开发环境中打印日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    enable-sql-runner: true
+    db-config:
+      logic-delete-field: isDeleted # 全局逻辑删除的实体字段名
+      logic-delete-value: 1 # 逻辑已删除的值
+      logic-not-delete-value: 0 # 逻辑未删除的值
+# ==================== Sakura 集中配置 ====================
+# 调参数只需改这里，重启生效，无需翻 Java 代码
+sakura:
+  # ------ 记忆相关（MySQLChatMemory / LongTermMemoryAdvisor） ------
+  memory:
+    safe-limit: 100              # 短期记忆滑动窗口上限（前端加载 / Redis 缓存 / LLM 上下文的消息条数上限）
+    summary-threshold: 20        # 摘要压缩触发阈值（消息数超过此值才压缩，建议比 safe-limit 小）
+    truncate-length: 100         # 长期记忆提取前截断用户消息（超过 N 字只取前 N 字做关键词抽取，节省 token）
+    recall-top-k: 3              # 长期记忆每次召回的条数（向量搜索 topK）
+
+  # ------ RAG 知识库检索（LoveApp / YuManus / HybridSearchDocumentRetriever） ------
+  rag:
+    similarity-threshold: 0.5    # 稠密向量最低相似度（低于此值的文档直接丢弃，0~1）
+    top-k: 3                     # 混合检索最终返回的文档条数
+    alpha: 0.7                   # 稠密向量在融合分数中的权重（0 = 纯 BM25，1 = 纯向量，默认 0.7）
+    bm25-k1: 1.5                 # BM25 词频饱和参数（越大词频越重要，经典值 1.2~2.0）
+    bm25-b: 0.75                 # BM25 文档长度归一化（0 忽略长度，1 完全归一化，经典值 0.75）
+    avg-doc-length: 100          # BM25 平均文档长度（用于长度归一化，按实际文档统计调整）
+
+  # ------ 分布式锁（LoveApp.executeWithLock） ------
+  lock:
+    wait-seconds: 10             # 获取锁的最大等待时间（秒，超时返回"系统繁忙"）
+    lease-seconds: 60            # 锁的自动释放时间（秒，防止 LLM 超时导致锁永不释放）
+
+  # ------ 工具调用（ToolCallAgent.act） ------
+  tool:
+    result-truncate-length: 600  # 工具返回结果在日志中的截断长度（字符数，超过则省略，完整数据仍传给 LLM）
+
+  # ------ 登录会话（SessionManager） ------
+  session:
+    ttl-minutes: 30              # 登录 token 有效期（分钟，Redis 和 MySQL 双写一致）
+
+  # ------ 摘要压缩（MySQLChatMemory.checkAndSummarize） ------
+  summary:
+    batch-size: 10               # 每次摘要压缩处理的旧消息条数（取最早 N 条做摘要后删除原始消息）
+
+  # ------ 向量库 ------
+  vectorstore:
+    clear-on-startup: false      # 启动时是否清空向量库（首次导入数据时设为 true，之后改回 false）
+
+  # ------ Wiki 数据导入（MilvusDataLoader） ------
+  wiki:
+    dir: E:/tools/milvus/wikimd  # Wiki Markdown 文件目录
+    chunk-size: 1200             # 文档切块大小（字数）
+    batch-size: 20               # 每批入库条数（DashScope Embedding API 上限 25）
+    batch-delay-ms: 100          # 批次间隔（毫秒，避免触发 API 限流）
+
+server:
+  port: 8123
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+# springdoc-openapi config
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.yupi.yuaiagent.controller
+# knife4j config
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+# searchAPI
+search-api:
+  # 需要替换为你自己的 key
+  api-key: 你的SerpAPI密钥（注册地址 https://serpapi.com）
+# Pexels 图片搜索 API（免费注册：https://www.pexels.com/api/）
+pexels:
+  api-key: 你的Pexels密钥（免费注册 https://www.pexels.com/api/）
+# 修改日志级别，查看 Spring AI 更多调用细节
+logging:
+  level:
+    org.springframework.ai: INFO
+    io.lettuce.core: INFO
+    org.springframework.data.redis: INFO

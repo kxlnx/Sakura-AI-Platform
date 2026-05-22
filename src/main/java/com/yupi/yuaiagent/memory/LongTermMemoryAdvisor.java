@@ -1,5 +1,6 @@
 package com.yupi.yuaiagent.memory;
 
+import com.yupi.yuaiagent.context.UserContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -12,12 +13,16 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * 长期记忆增强顾问
@@ -33,7 +38,17 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
     @Resource
     private LongTermMemoryWriter longTermMemoryWriter;
 
+    @Resource
+    @Qualifier("backgroundExecutor")
+    private Executor backgroundExecutor;
+
     private static final String USER_ID_PARAM = "userId";
+
+    @Value("${sakura.memory.truncate-length:100}")
+    private int messageTruncateLength;
+
+    @Value("${sakura.memory.recall-top-k:3}")
+    private int memoryRecallTopK;
 
     @Override
     public String getName() {
@@ -102,7 +117,7 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
      */
     private String extractUserId(ChatClientRequest request) {
         // 方案1：优先从 UserContext 获取（测试环境或登录后的用户）
-        String userIdFromContext = com.yupi.yuaiagent.context.UserContext.getUserId();
+        String userIdFromContext = UserContext.getUserId();
         if (userIdFromContext != null && !"anonymous".equals(userIdFromContext)) {
             log.debug("[长期记忆] 从 UserContext 获取 userId: {}", userIdFromContext);
             return userIdFromContext;
@@ -132,8 +147,8 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
             if (userMessages != null && !userMessages.isEmpty()) {
                 UserMessage lastUserMessage = userMessages.get(userMessages.size() - 1);
                 String content = lastUserMessage.getText();
-                if (content.length() > 100) {
-                    return content.substring(0, 100) + "...";
+                if (content.length() > messageTruncateLength) {
+                    return content.substring(0, messageTruncateLength) + "...";
                 }
                 return content;
             }
@@ -147,15 +162,16 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
      * 处理记忆写入
      */
     private void handleMemoryWrite(String userId, String userMessage) {
-        // 处理显式记忆指令
         if (userMessage.contains("记住") || userMessage.contains("请记住")) {
             log.info("[长期记忆] 检测到显式记忆指令");
-            longTermMemoryWriter.handleExplicitMemory(userId, userMessage);
-        }
-        // 可选：也可以处理隐式记忆提取
-        else if (shouldExtractImplicitMemory(userMessage)) {
+            CompletableFuture.runAsync(
+                    () -> longTermMemoryWriter.handleExplicitMemory(userId, userMessage),
+                    backgroundExecutor);
+        } else if (shouldExtractImplicitMemory(userMessage)) {
             log.info("[长期记忆] 检测到可提取的隐式信息");
-            longTermMemoryWriter.handleImplicitMemory(userId, userMessage);
+            CompletableFuture.runAsync(
+                    () -> longTermMemoryWriter.handleImplicitMemory(userId, userMessage),
+                    backgroundExecutor);
         }
     }
 
@@ -185,7 +201,7 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
         boolean shouldTrigger = longTermMemoryReader.shouldTrigger(userMessage);
 
         // 读取长期记忆
-        var memories = longTermMemoryReader.readMemory(userId, userMessage, 3);
+        var memories = longTermMemoryReader.readMemory(userId, userMessage, memoryRecallTopK);
         if (!memories.isEmpty()) {
             log.info("[长期记忆] 召回 {} 条记忆", memories.size());
             // 暂时注释掉详细日志，避免日志过多
@@ -206,12 +222,12 @@ public class LongTermMemoryAdvisor implements CallAdvisor, StreamAdvisor {
      */
     private String buildMemorySystemMessage(List<String> memoryContents) {
         StringBuilder sb = new StringBuilder();
-        sb.append("【小本本上关于哥哥的记录】\n");
-        sb.append("之前和哥哥聊天时，你在小本本上记下了这些：\n");
+        sb.append("【用户历史偏好记录】\n");
+        sb.append("之前对话中了解到的用户历史兴趣和关注点：\n");
         for (int i = 0; i < memoryContents.size(); i++) {
             sb.append((i + 1)).append(". ").append(memoryContents.get(i)).append("\n");
         }
-        sb.append("\n结合这些记忆，用你平时和哥哥相处的方式回应他。");
+        sb.append("\n结合以上用户偏好，提供更有针对性的历史解答。");
         return sb.toString();
     }
 }

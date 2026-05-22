@@ -35,6 +35,11 @@ public class ChatMessage implements Serializable {
     private String conversationId;
 
     /**
+     * 用户ID
+     */
+    private String userId;
+
+    /**
      * 消息内容
      */
     private String content;
@@ -62,7 +67,7 @@ public class ChatMessage implements Serializable {
     /**
      * 是否删除
      */
-    private Integer isDelete;
+    private Integer isDeleted;
 
 
     /**
@@ -71,6 +76,11 @@ public class ChatMessage implements Serializable {
     public static ChatMessage fromMessage(String conversationId, Message message) {
         ChatMessage chatMessage = new ChatMessage();
         chatMessage.setConversationId(conversationId);
+        // 从 conversationId（格式: userId:chatId）提取 userId
+        int colonIdx = conversationId.indexOf(':');
+        if (colonIdx > 0) {
+            chatMessage.setUserId(conversationId.substring(0, colonIdx));
+        }
         // 根据消息类型获取内容
         if (message instanceof SystemMessage) {
             chatMessage.setContent(((SystemMessage) message).getText());
@@ -82,15 +92,13 @@ public class ChatMessage implements Serializable {
         chatMessage.setRole(message.getMessageType().getValue());
         Object promptTokens = message.getMetadata().get("promptTokens");
         Object completionTokens = message.getMetadata().get("completionTokens");
-        if (promptTokens != null) {
-            chatMessage.setTokens((Integer) promptTokens);
-        }
-        if (completionTokens != null) {
-            chatMessage.setTokens((Integer) completionTokens);
-        }
+        int total = 0;
+        if (promptTokens != null) total += (Integer) promptTokens;
+        if (completionTokens != null) total += (Integer) completionTokens;
+        if (total > 0) chatMessage.setTokens(total);
         chatMessage.setCreateTime(new Date());
         chatMessage.setUpdateTime(new Date());
-        chatMessage.setIsDelete(0);
+        chatMessage.setIsDeleted(0);
         return chatMessage;
     }
 

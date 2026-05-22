@@ -2,7 +2,6 @@ package com.yupi.yuaiagent.chatmemory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yupi.yuaiagent.context.UserContext;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -22,9 +21,9 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+@Deprecated // 已被 MySQLChatMemory(@Primary) 替代，无任何地方注入此类
 @Slf4j
 @Component
-@Primary
 public class RedisListChatMemory implements ChatMemory {
 
     @Resource
@@ -55,7 +54,7 @@ public class RedisListChatMemory implements ChatMemory {
 
         String roundJson = serializeRound(newMessages);
         stringRedisTemplate.opsForList().rightPush(redisKey, roundJson);
-        stringRedisTemplate.expire(redisKey, 7, TimeUnit.DAYS);
+        stringRedisTemplate.expire(redisKey, 30, TimeUnit.MINUTES);
         
         log.info("[短期记忆-写] Redis 写入成功, key={}", redisKey);
 
@@ -142,7 +141,7 @@ public class RedisListChatMemory implements ChatMemory {
             for (String keepRound : toKeepRounds) {
                 stringRedisTemplate.opsForList().rightPush(redisKey, keepRound);
             }
-            stringRedisTemplate.expire(redisKey, 7, TimeUnit.DAYS);
+            stringRedisTemplate.expire(redisKey, 30, TimeUnit.MINUTES);
 
             log.info("[记忆压缩] 压缩完成！已放回摘要文本与后半部分窗口数据。");
         }

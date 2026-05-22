@@ -1,6 +1,12 @@
 ### CUSTOM ###
+application.yml
 application-local.yml
+application-prod.yml
 tmp
+*.log
+docs/
+node_modules/
+dist/
 
 HELP.md
 target/

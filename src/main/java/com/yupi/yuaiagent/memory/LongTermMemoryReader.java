@@ -1,5 +1,6 @@
 package com.yupi.yuaiagent.memory;
 
+import com.yupi.yuaiagent.memory.service.MilvusHybridSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -27,7 +28,7 @@ public class LongTermMemoryReader {
     private boolean useHybridSearch;
     
     @Autowired(required = false)
-    private com.yupi.yuaiagent.memory.service.MilvusHybridSearchService hybridSearchService;
+    private MilvusHybridSearchService hybridSearchService;
 
     // 触发关键词
     private static final List<String> TRIGGER_KEYWORDS = List.of(

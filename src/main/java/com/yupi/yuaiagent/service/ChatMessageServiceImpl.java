@@ -13,21 +13,40 @@ import java.util.List;
  * @description 针对表【chat_message(聊天消息表)】的数据库操作Service实现
  * @createDate 2025-04-30 19:56:23
  */
-//@Service  // 当前使用 Redis 存储，MySQL 未启用
+@Service
 public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatMessage>
         implements ChatMessageService{
 
     @Override
     public List<ChatMessage> findLatestMessages(String conversationId, int limit) {
-        // 只根据conversationId查询，不涉及messageType
-        return this.lambdaQuery()
+        List<ChatMessage> list = this.lambdaQuery()
                 .eq(ChatMessage::getConversationId, conversationId)
-                .last("limit " + limit)
+                .orderByDesc(ChatMessage::getId)
+                .last("LIMIT " + Math.min(limit, 1000))
                 .list();
+        java.util.Collections.reverse(list);
+        return list;
     }
 
     @Override
     public Boolean deleteByConversationId(String conversationId) {
-        return this.remove(lambdaQuery().eq(ChatMessage::getConversationId,conversationId));
+        // 物理删除（绕过全局逻辑删除）
+        return this.baseMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChatMessage>()
+                .eq(ChatMessage::getConversationId, conversationId)) > 0;
+    }
+
+    @Override
+    public List<ChatMessage> getUserConversations(String userId) {
+        return this.lambdaQuery()
+                .eq(ChatMessage::getUserId, userId)
+                .eq(ChatMessage::getRole, "user")
+                .orderByDesc(ChatMessage::getCreateTime)
+                .list()
+                .stream()
+                .collect(java.util.LinkedHashMap<String, ChatMessage>::new,
+                         (m, msg) -> m.putIfAbsent(msg.getConversationId(), msg),
+                         (m1, m2) -> {})
+                .values().stream()
+                .toList();
     }
 }

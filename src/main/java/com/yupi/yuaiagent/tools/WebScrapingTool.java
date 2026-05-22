@@ -10,7 +10,13 @@ import org.springframework.ai.tool.annotation.ToolParam;
  */
 public class WebScrapingTool {
 
-    @Tool(description = "Scrape the content of a web page")
+    @Tool(description = """
+            Scrape the full HTML content of a web page to read detailed information.
+            Use this tool when: searchWeb returned a link, and the snippet is not enough — you need to read the full article.
+            Do NOT use for: general search (use searchWeb), images (use searchImage), made-up URLs.
+            url: must be a real URL from searchWeb results, starting with http:// or https://
+            Returns the full HTML of the page (may be very long, automatically truncated for analysis).
+            """)
     public String scrapeWebPage(@ToolParam(description = "URL of the web page to scrape") String url) {
         try {
             Document document = Jsoup.connect(url).get();

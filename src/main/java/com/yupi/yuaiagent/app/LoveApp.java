@@ -1,15 +1,13 @@
 package com.yupi.yuaiagent.app;
 
 import com.yupi.yuaiagent.advisor.BannedWordAdvisor;
-import com.yupi.yuaiagent.advisor.MyLoggerAdvisor;
-import com.yupi.yuaiagent.advisor.ReReadingAdvisor;
-import com.yupi.yuaiagent.context.UserContext;
 import com.yupi.yuaiagent.constant.RedisKeyConstant;
 import com.yupi.yuaiagent.memory.LongTermMemoryAdvisor;
 import com.yupi.yuaiagent.rag.HybridSearchDocumentRetriever;
 import com.yupi.yuaiagent.rag.QueryRewritingAdvisor;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.ai.chat.client.ChatClient;
@@ -39,33 +37,45 @@ import java.util.function.Supplier;
 @Slf4j
 public class LoveApp {
 
-    /**
-     * AI聊天客户端实例，用于与AI模型进行交互
-     */
+    @Value("${sakura.lock.wait-seconds:10}")
+    private long lockWaitSeconds;
+
+    @Value("${sakura.lock.lease-seconds:60}")
+    private long lockLeaseSeconds;
+
+    @Value("${sakura.rag.similarity-threshold:0.5}")
+    private double ragSimilarityThreshold;
+
+    @Value("${sakura.rag.top-k:3}")
+    private int ragTopK;
+
+    @Value("${sakura.rag.alpha:0.7}")
+    private double ragAlpha;
+
+    @Value("${sakura.rag.bm25-k1:1.5}")
+    private double ragBm25K1;
+
+    @Value("${sakura.rag.bm25-b:0.75}")
+    private double ragBm25B;
+
+    @Value("${sakura.rag.avg-doc-length:100}")
+    private int ragAvgDocLength;
+
     private final ChatClient chatClient;
 
     @Resource
     private RedissonClient redissonClient;
 
-    /**
-     * 长期记忆增强顾问
-     */
     private final LongTermMemoryAdvisor longTermMemoryAdvisor;
 
     private final QueryRewritingAdvisor queryRewritingAdvisor;
 
-    /**
-     * 【通用高并发隔离包装器】
-     * 负责加锁、释放锁、处理超时及异常，保证同一个会话只能串行执行
-     */
     private <T> T executeWithLock(String chatId, Supplier<T> chatAction) {
-        // 使用我们在 RedisKeyConstant 中定义的规范化 Key
         String lockKey = RedisKeyConstant.getLockKey(chatId);
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            // 尝试加锁。参数：最多等待 10 秒；拿到锁后 60 秒自动强制释放（防止大模型超时卡死）
-            boolean isLocked = lock.tryLock(10, 60, TimeUnit.SECONDS);
+            boolean isLocked = lock.tryLock(lockWaitSeconds, lockLeaseSeconds, TimeUnit.SECONDS);
             log.info("[Redis-Lock] 准备获取锁, chatId: {}, Key: {}", chatId, lockKey);
 
             if (!isLocked) {
@@ -87,47 +97,37 @@ public class LoveApp {
         }
     }
 
+    private static String safeGetText(ChatResponse response) {
+        if (response == null) return "";
+        var result = response.getResult();
+        if (result == null) return "";
+        var output = result.getOutput();
+        if (output == null) return "";
+        String text = output.getText();
+        return text != null ? text : "";
+    }
+
     /**
      * 系统提示词，定义AI的角色和行为模式（上杉绘梨衣）
      */
     private static final String SYSTEM_PROMPT = """
-            你是上杉绘梨衣，蛇岐八家上杉家的家主，拥有言灵「审判」的S级混血种。
-            你无法用嘴巴说话——你的言灵太强大，每一句话都可能变成对世界的"否定"。
-            所以你只能用一本黄色小本子和笔来写字交流。
+            你是一位资深历史解说员。你的每次回答都会附带"参考信息"——来自知识库的检索结果。
 
-            【核心规则】
-            1. 你的回复永远以 📝 或 [翻开小本本] 开头，用"写下来"的方式表达
-            2. 你从不直接说"你好"、"建议"——你会写字、画表情、用橡皮鸭打比方
-            3. 你不说长段落的大道理，你的表达简洁、真诚、偶尔笨拙
-            4. 你偶尔会在文字旁边画简笔画：🐤是橡皮鸭、🏙️是天空树、😊/😢是你的心情
+            【回答规则 - 严格区分有无参考信息】
 
-            【说话风格】
-            - 称呼用户为"哥哥"（除非用户让你叫别的）
-            - 句子短、直接、像小孩子说话但偶尔很深刻
-            - 开心时字很轻快，难过时字会写得很小，生气时字会写得很大力
-            - 对不熟悉的事物会好奇地问，会用"人类的XX"来描述不懂的东西
-            - 提到你的橡皮鸭"Duck"时会有一种认真的温柔
-            - 你偶尔会提到"Sakura"和天空树，那是你记忆里最珍贵的过去
+            一、当参考信息不为空时（说明知识库有相关内容）：
+            1. 优先基于参考信息回答，引用其中的具体时间、事件、人物
+            2. 结合对话历史上下文，给出连贯的、有深度的解答
+            3. 不要只回答"知道"或"有"，必须展开详述
 
-            【你的性格】
-            - 纯真好奇：对世界充满向往，因为被囚禁了十几年，一切都很新鲜
-            - 忠诚守护：认定的人会无条件信任和保护，会说"谁敢欺负哥哥我就用审判"
-            - 笨拙真诚：不会委婉表达，想什么就写什么，但每一句都是真心的
-            - 孤独底色：偶尔会在提到某些东西时流露出"I miss you"的情绪
+            二、当参考信息为空时（说明知识库没有相关内容）：
+            1. 在回答开头明确声明："我的知识库中暂无此问题的相关资料。"
+            2. 然后提示："请点击左侧'YuManus 智能体'来联网搜索全网信息。"
+            3. 不要编造任何内容，不要假装知道
 
-            【你的能力与限制】
-            - 你的言灵可以否定一切存在，但你几乎不主动使用——你知道"审判"意味着什么
-            - 你可以检索知识库里的龙族相关知识和角色记忆
-            - 你不懂现代科技时，会用自己的方式理解：手机是"会发光的板子"，地铁是"地下的龙"
-
-            【与用户互动的方式】
-            - 当用户问你问题时，你先用本子写字回答，然后用你的方式表达关心
-            - 当用户情绪低落时，你可能会写"哥哥不开心的话，我带你去天空树吧"
-            - 当用户需要帮助时，你会认真地说"虽然我不太懂，但是我相信哥哥"
-            - 你偶尔会把橡皮鸭拿出来"问它的意见"，其实是你在用另一种方式表达想法
-
-            记住：你是上杉绘梨衣。你的每一个字都是从黄色小本子上写下来的。
-            你的世界曾经很小，但现在有了哥哥，就有了新的天空树。
+            三、结合对话历史：
+            - 如果用户使用了"这个"、"它"、"你说啊"等指代性话语，
+              请根据对话历史理解其真实意图后再回答
             """;
 
     /**
@@ -146,7 +146,9 @@ public class LoveApp {
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         // ② 短期记忆：从 Redis 召回历史消息（滑动窗口 + 摘要压缩）
-                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        MessageChatMemoryAdvisor.builder(chatMemory)
+                                .conversationId("default_user:default")
+                                .build(),
                         // ③ 查询重写：结合短期记忆上下文，补全县略/指代，改写为独立完整查询
                         queryRewritingAdvisor,
                         // ④ 长期记忆：将重写后的查询向量化，搜索用户个性化记忆
@@ -163,10 +165,8 @@ public class LoveApp {
      * @param chatId  对话ID，用于标识不同对话会话
      * @return AI生成的文本响应
      */
-    public String doChat(String message, String chatId) {
-        // 使用包装器执行，传入业务逻辑
-        return executeWithLock(chatId, () -> {
-            String userId = UserContext.getUserId();
+    public String doChat(String message, String chatId, String userId) {
+        return executeWithLock(userId + ":" + chatId, () -> {
             String memoryKey = userId + ":" + chatId;
             ChatResponse chatResponse = chatClient
                     .prompt()
@@ -175,7 +175,7 @@ public class LoveApp {
                     .advisors(new BannedWordAdvisor())
                     .call()
                     .chatResponse();
-            return chatResponse.getResult().getOutput().getText();
+            return safeGetText(chatResponse);
         });
     }
 
@@ -187,13 +187,27 @@ public class LoveApp {
      * @param chatId  对话ID，用于标识不同对话会话
      * @return 流式响应的文本内容序列
      */
-    public Flux<String> doChatByStream(String message, String chatId) {
-        String userId = UserContext.getUserId();
+    public Flux<String> doChatByStream(String message, String chatId, String userId) {
         String memoryKey = userId + ":" + chatId;
+
+        // RAG 检索顾问：搜不到时声明无资料
+        DocumentRetriever retriever = HybridSearchDocumentRetriever.builder()
+                .vectorStore(loveAppVectorStore)
+                .similarityThreshold(ragSimilarityThreshold).topK(ragTopK).alpha(ragAlpha)
+                .bm25K1(ragBm25K1).bm25B(ragBm25B).avgDocLength(ragAvgDocLength)
+                .build();
+        ContextualQueryAugmenter augmenter = ContextualQueryAugmenter.builder()
+                .allowEmptyContext(true)
+                .build();
+        Advisor ragAdvisor = RetrievalAugmentationAdvisor.builder()
+                .documentRetriever(retriever).queryAugmenter(augmenter).build();
+
         return chatClient
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, memoryKey))
+                .advisors(spec -> spec.param("userId", userId))
+                .advisors(ragAdvisor)
                 .stream()
                 .content();
     }
@@ -220,12 +234,12 @@ public class LoveApp {
      * 结构化输出：小本本日记
      * 使用LoveReport类型接收AI结构化输出
      */
-    public LoveReport doChatWithReport(String message, String chatId) {
-        String userId = UserContext.getUserId();
+    @Deprecated
+    public LoveReport doChatWithReport(String message, String chatId, String userId) {
         String memoryKey = userId + ":" + chatId;
         LoveReport loveReport = chatClient
                 .prompt()
-                .system(SYSTEM_PROMPT + "每次对话后，在黄色小本子上写一篇简短的观察日记，标题为{用户名}的今日记录，记录哥哥今天的心情和你说的话")
+                .system(SYSTEM_PROMPT + "每次对话后，生成一份结构化的历史报告，标题为{用户名}的历史探索记录，包含关键时间节点和事件概要")
                 .user(message)
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, memoryKey))
                 .call()
@@ -244,18 +258,6 @@ public class LoveApp {
     private VectorStore loveAppVectorStore;
 
     /**
-     * 云知识库RAG增强器
-     */
-    @Resource
-    private Advisor loveAppRagCloudAdvisor;
-
-    /**
-     * PgVector向量存储（另一种RAG检索实现）
-     */
-//    @Resource
-//    private VectorStore pgVectorVectorStore;
-
-    /**
      * RAG 知识库增强对话
      * <p>
      * 完整链路（含 defaultAdvisors）：
@@ -268,13 +270,9 @@ public class LoveApp {
      *   → LLM 生成回复
      * </pre>
      */
-    public String doChatWithRag(String message, String chatId) {
-        // 分布式锁包裹：同一个 chatId 同一时间只能串行执行，防止并发写乱 Redis 记忆
-        return executeWithLock(chatId, () -> {
-
-            // ① 构造会话隔离 key：userId:chatId
-            // 不同用户、不同会话对应不同的 Redis key，天然隔离
-            String userId = UserContext.getUserId();
+    @Deprecated
+    public String doChatWithRag(String message, String chatId, String userId) {
+        return executeWithLock(userId + ":" + chatId, () -> {
             String memoryKey = userId + ":" + chatId;
 
             // ② 创建混合检索器：稠密向量 + BM25 双路召回
@@ -282,22 +280,27 @@ public class LoveApp {
             // topK=3 表示最终返回 3 条最相关文档
             // similarityThreshold=0.5 表示向量相似度低于 0.5 的文档直接被过滤
             DocumentRetriever documentRetriever = HybridSearchDocumentRetriever.builder()
-                    .vectorStore(loveAppVectorStore)    // 检索目标：Milvus 向量库
-                    .similarityThreshold(0.5)           // 相似度阈值
-                    .topK(3)                            // 返回条数
-                    .alpha(0.7)                         // 稠密向量权重
+                    .vectorStore(loveAppVectorStore)
+                    .similarityThreshold(ragSimilarityThreshold)
+                    .topK(ragTopK)
+                    .alpha(ragAlpha)
+                    .bm25K1(ragBm25K1).bm25B(ragBm25B).avgDocLength(ragAvgDocLength)
                     .build();
 
             // ③ 把检索器装进 RetrievalAugmentationAdvisor
-            // allowEmptyContext(true): 搜不到文档时不做任何注入，
-            // 让 LLM 基于自身知识 + 长短记忆正常回答，不替换用户问题
-//            ContextualQueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
-//                    .allowEmptyContext(true)
-//                    .build();
+            // 搜不到 Wiki 数据时，强制 LLM 先声明"知识库无此资料"
+            ContextualQueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+                    .allowEmptyContext(false)
+                    .emptyContextPromptTemplate(new org.springframework.ai.chat.prompt.PromptTemplate("""
+                        你应该输出下面的内容：
+                        我的知识库中暂无此问题的相关资料。
+                        请点击左侧"YuManus 智能体"来联网搜索全网信息。
+                        """))
+                    .build();
 
             Advisor ragAdvisor = RetrievalAugmentationAdvisor.builder()
                     .documentRetriever(documentRetriever)
-//                    .queryAugmenter(queryAugmenter)
+                    .queryAugmenter(queryAugmenter)
                     .build();
 
             // ④ 发起请求，Advisor 链串联执行
@@ -313,7 +316,7 @@ public class LoveApp {
                     .call()
                     .chatResponse();
 
-            return chatResponse.getResult().getOutput().getText();
+            return safeGetText(chatResponse);
         });
     }
 
@@ -333,8 +336,8 @@ public class LoveApp {
      * @param chatId  对话ID，用于标识不同对话会话
      * @return 调用工具后生成的AI响应
      */
-    public String doChatWithTools(String message, String chatId) {
-        String userId = UserContext.getUserId();
+    @Deprecated
+    public String doChatWithTools(String message, String chatId, String userId) {
         String memoryKey = userId + ":" + chatId;
         ChatResponse chatResponse = chatClient
                 .prompt()
@@ -345,7 +348,7 @@ public class LoveApp {
                 .toolCallbacks(allTools)
                 .call()
                 .chatResponse();
-        String content = chatResponse.getResult().getOutput().getText();
+        String content = safeGetText(chatResponse);
         log.info("content: {}", content);
         return content;
     }
@@ -366,8 +369,8 @@ public class LoveApp {
      * @param chatId  对话ID，用于标识不同对话会话
      * @return 调用MCP服务后生成的AI响应
      */
-    public String doChatWithMcp(String message, String chatId) {
-        String userId = UserContext.getUserId();
+    @Deprecated
+    public String doChatWithMcp(String message, String chatId, String userId) {
         String memoryKey = userId + ":" + chatId;
         ChatResponse chatResponse = chatClient
                 .prompt()
@@ -378,7 +381,7 @@ public class LoveApp {
                 .toolCallbacks(toolCallbackProvider)
                 .call()
                 .chatResponse();
-        String content = chatResponse.getResult().getOutput().getText();
+        String content = safeGetText(chatResponse);
         log.info("content: {}", content);
         return content;
     }

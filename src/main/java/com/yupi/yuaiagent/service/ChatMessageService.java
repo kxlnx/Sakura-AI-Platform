@@ -27,4 +27,7 @@ public interface ChatMessageService extends IService<ChatMessage> {
      * @return 删除的记录数
      */
     Boolean deleteByConversationId(String conversationId);
+
+    /** 获取用户的所有会话列表（去重，带标题） */
+    List<ChatMessage> getUserConversations(String userId);
 }

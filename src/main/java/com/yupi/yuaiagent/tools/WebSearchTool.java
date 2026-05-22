@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 public class WebSearchTool {
 
     // SearchAPI 的搜索接口地址
-    private static final String SEARCH_API_URL = "https://www.searchapi.io/api/v1/search";
+    private static final String SEARCH_API_URL = "https://serpapi.com/search";
 
     private final String apiKey;
 
@@ -26,7 +26,13 @@ public class WebSearchTool {
         this.apiKey = apiKey;
     }
 
-    @Tool(description = "Search for information from Baidu Search Engine")
+    @Tool(description = """
+            Search the web using Baidu for real-time text information.
+            Use this tool when: user asks about facts, news, current events, or knowledge you're unsure about.
+            Do NOT use for: images/photos/pictures (use searchImage instead), casual chat, opinions.
+            query: extract the core keywords from user's question, do NOT fabricate URLs or search terms.
+            Returns top 5 search result snippets with titles and links.
+            """)
     public String searchWeb(
             @ToolParam(description = "Search query keyword") String query) {
         Map<String, Object> paramMap = new HashMap<>();
@@ -35,12 +41,13 @@ public class WebSearchTool {
         paramMap.put("engine", "baidu");
         try {
             String response = HttpUtil.get(SEARCH_API_URL, paramMap);
-            // 取出返回结果的前 5 条
             JSONObject jsonObject = JSONUtil.parseObj(response);
-            // 提取 organic_results 部分
             JSONArray organicResults = jsonObject.getJSONArray("organic_results");
-            List<Object> objects = organicResults.subList(0, 5);
-            // 拼接搜索结果为字符串
+            if (organicResults == null || organicResults.isEmpty()) {
+                return "No search results found for: " + query;
+            }
+            int count = Math.min(organicResults.size(), 5);
+            List<Object> objects = organicResults.subList(0, count);
             String result = objects.stream().map(obj -> {
                 JSONObject tmpJSONObject = (JSONObject) obj;
                 return tmpJSONObject.toString();

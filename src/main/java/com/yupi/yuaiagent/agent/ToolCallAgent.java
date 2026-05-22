@@ -7,6 +7,7 @@ import com.yupi.yuaiagent.agent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -17,6 +18,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -29,7 +31,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ToolCallAgent extends ReActAgent {
 
-    // 可用的工具
+    @Value("${sakura.tool.result-truncate-length:600}")
+    private int toolResultTruncateLength;
+
     private final ToolCallback[] availableTools;
 
     // 保存工具调用信息的响应结果（要调用那些工具）
@@ -72,31 +76,24 @@ public class ToolCallAgent extends ReActAgent {
      */
     @Override
     public boolean think() {
-        /*
-         * 校验并追加用户提示词到消息列表
-         */
-        if (StrUtil.isNotBlank(getNextStepPrompt())) {
-            UserMessage userMessage = new UserMessage(getNextStepPrompt());
-            getMessageList().add(userMessage);
-        }
-
-        /*
-         * 调用AI大模型获取工具调用决策
-         * 构建Prompt并执行聊天请求，记录响应结果供后续act阶段使用
-         */
         List<Message> messageList = getMessageList();
         Prompt prompt = new Prompt(messageList, this.chatOptions);
         try {
             // 构建聊天客户端调用，添加记忆和RAG支持
             var chatClientCall = getChatClient().prompt(prompt)
-                    .system(getSystemPrompt())
-                    .toolCallbacks(availableTools);  // ✅ 修复：使用 toolCallbacks() 而非 tools()
+                    .system(getSystemPrompt());
+            // nextStepPrompt 通过 system 消息注入，不写入 messageList，避免污染数据库
+            if (StrUtil.isNotBlank(getNextStepPrompt())) {
+                chatClientCall = chatClientCall.system(getNextStepPrompt());
+            }
+            chatClientCall = chatClientCall.toolCallbacks(availableTools);  // ✅ 修复：使用 toolCallbacks() 而非 tools()
 
-            // 添加对话记忆参数
             if (StrUtil.isNotBlank(chatId) && StrUtil.isNotBlank(userId)) {
                 String memoryKey = userId + ":" + chatId;
-                chatClientCall = chatClientCall.advisors(spec -> spec.param("conversationId", memoryKey));
-                chatClientCall = chatClientCall.advisors(spec -> spec.param("userId", userId));
+                chatClientCall = chatClientCall.advisors(spec -> {
+                    spec.param(ChatMemory.CONVERSATION_ID, memoryKey);
+                    spec.param("userId", userId);
+                });
             }
 
             ChatResponse chatResponse = chatClientCall
@@ -149,7 +146,20 @@ public class ToolCallAgent extends ReActAgent {
         if (!toolCallChatResponse.hasToolCalls()) {
             return "没有工具需要调用";
         }
-        // 调用工具
+
+        // 前置校验：拦截明显编造的参数
+        AssistantMessage assistantMessage = toolCallChatResponse.getResult().getOutput();
+        List<AssistantMessage.ToolCall> toolCalls = assistantMessage.getToolCalls();
+        for (AssistantMessage.ToolCall call : toolCalls) {
+            String validationError = validateToolCall(call);
+            if (validationError != null) {
+                log.warn("[ToolCallAgent] 参数校验不通过: {} → {}", call.name(), validationError);
+                getMessageList().add(new AssistantMessage(
+                    "工具调用被拦截: " + validationError + "。请向用户说明情况，询问正确的信息。"));
+                return "工具调用被拦截: " + validationError;
+            }
+        }
+
         Prompt prompt = new Prompt(getMessageList(), this.chatOptions);
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         // 记录消息上下文，conversationHistory 已经包含了助手消息和工具调用返回的结果
@@ -163,9 +173,40 @@ public class ToolCallAgent extends ReActAgent {
             setState(AgentState.FINISHED);
         }
         String results = toolResponseMessage.getResponses().stream()
-                .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
+                .map(response -> {
+                    String data = response.responseData();
+                    // 截断过长结果，避免前端被海量 HTML 淹没
+                    String displayData = data != null && data.length() > toolResultTruncateLength
+                            ? data.substring(0, toolResultTruncateLength) + "...（已截断，完整数据已用于后续分析）"
+                            : data;
+                    return "【" + response.name() + "】返回：" + displayData;
+                })
                 .collect(Collectors.joining("\n"));
         log.info(results);
         return results;
+    }
+
+    /**
+     * 参数校验：拦截 LLM 编造的参数
+     * @return 错误信息，null 表示通过
+     */
+    private String validateToolCall(AssistantMessage.ToolCall call) {
+        String args = call.arguments();
+        if (args == null || args.isBlank()) {
+            return "参数为空，工具调用被拒绝";
+        }
+        // 检查是否包含明显的虚构内容（纯随机字符串）
+        if (args.matches(".*\"[a-zA-Z0-9]{30,}\".*")) {
+            return "参数疑似随机字符串，请提供真实信息";
+        }
+        // URL 参数检查
+        if (args.toLowerCase().contains("url") && !args.contains("http")) {
+            return "URL 参数格式不正确，需要 http/https 前缀";
+        }
+        // 空参数检查
+        if (args.contains("\"\"") || args.contains("''")) {
+            return "存在空参数，请补全必要信息";
+        }
+        return null;
     }
 }

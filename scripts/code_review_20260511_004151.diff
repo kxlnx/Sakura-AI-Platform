@@ -1,0 +1,145 @@
+diff --git a/docs/AI-CODE-REVIEW-GUIDE.md b/docs/AI-CODE-REVIEW-GUIDE.md
+index b91ccf2..82aca8c 100644
+--- a/docs/AI-CODE-REVIEW-GUIDE.md
++++ b/docs/AI-CODE-REVIEW-GUIDE.md
+@@ -2,7 +2,7 @@
+ 
+ > 适用于：Trae IDE（中文版）、Cursor IDE
+ 
+----
++***
+ 
+ ## 一、项目文件说明
+ 
+@@ -23,13 +23,14 @@ sakura-agent-master/
+     └── AI-CODE-REVIEW-GUIDE.md         ← 本教程
+ ```
+ 
+----
++***
+ 
+ ## 二、第一步：初始化Git仓库（仅需执行一次）
+ 
+ 在项目根目录空白处，**按住 Shift + 右键**，选择"在此处打开 PowerShell 窗口"
+ 
+ 运行：
++
+ ```powershell
+ git init
+ git add .
+@@ -37,7 +38,7 @@ git commit -m "Initial commit"
+ git branch -M master
+ ```
+ 
+----
++***
+ 
+ ## 三、第二步：在 Trae 中配置规则（仅需执行一次）
+ 
+@@ -59,18 +60,18 @@ git branch -M master
+ 3. 规则内容填写：
+ 
+ ```markdown
+-@import "./src/main/resources/prompts/python_rule.md"
++@import "./src/main/resources/prompts/alc-review.md"
+ ```
+ 
+-4. 点击 **"保存"**
++1. 点击 **"保存"**
+ 
+----
++***
+ 
+ ## 四、第三步：修改代码
+ 
+ 用 Trae 打开项目，随意改一个文件，比如添加一行注释
+ 
+----
++***
+ 
+ ## 五、第四步：生成Diff文件
+ 
+@@ -86,7 +87,7 @@ git branch -M master
+ 
+ 脚本运行后会自动输出diff内容和提示词
+ 
+----
++***
+ 
+ ## 六、第五步：在 Trae 中触发规则进行CodeReview
+ 
+@@ -117,7 +118,7 @@ git branch -M master
+ 
+ AI会按照规则输出格式化的CodeReview报告！
+ 
+----
++***
+ 
+ ## 七、完整操作流程图
+ 
+@@ -143,7 +144,7 @@ AI会按照规则输出格式化的CodeReview报告！
+ └─────────────────────────────────────────────────────────────────┘
+ ```
+ 
+----
++***
+ 
+ ## 八、关键：如何在Trae中触发规则
+ 
+@@ -186,7 +187,7 @@ index abc123..def456 100644
+ └─────────────────────────────────────────────────────────────┘
+ ```
+ 
+----
++***
+ 
+ ## 九、快速参考
+ 
+@@ -202,33 +203,36 @@ index abc123..def456 100644
+ # 4. 按回车发送
+ ```
+ 
+----
++***
+ 
+ ## 十、常见问题
+ 
+ ### Q1: @{alc-review} 不起作用
++
+ - 确保规则名称是 `alc-review`，不是其他名字
+ - 确保规则内容是 `@import "./src/main/resources/prompts/alc-review-prompt.md"`
+ 
+ ### Q2: Diff 文件为空
++
+ - 确保已初始化 Git 仓库
+ - 确保已修改文件但还没提交
+ 
+ ### Q3: 找不到脚本
++
+ - 在终端中进入项目根目录：`cd G:\新建文件夹\sakura-agent-master`
+ - 然后运行：`.\scripts\alc-review.bat`
+ 
+----
++***
+ 
+ ## 十一、文件位置汇总
+ 
+-| 文件 | 路径 |
+-|-----|------|
+-| 详细教程 | `docs/AI-CODE-REVIEW-GUIDE.md` |
+-| AI提示词 | `src/main/resources/prompts/alc-review-prompt.md` |
+-| 规则文件 | `.cursor/rules/alc-review.mdc` |
+-| Windows脚本 | `scripts/alc-review.bat` |
++| 文件        | 路径                                                |
++| --------- | ------------------------------------------------- |
++| 详细教程      | `docs/AI-CODE-REVIEW-GUIDE.md`                    |
++| AI提示词     | `src/main/resources/prompts/alc-review-prompt.md` |
++| 规则文件      | `.cursor/rules/alc-review.mdc`                    |
++| Windows脚本 | `scripts/alc-review.bat`                          |
+ 
+----
++***
+ 
+-**现在你可以在 Trae 中配置并使用了！**
+\ No newline at end of file
++**现在你可以在 Trae 中配置并使用了！**
