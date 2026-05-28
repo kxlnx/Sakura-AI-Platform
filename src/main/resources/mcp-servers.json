@@ -7,7 +7,7 @@
         "@amap/amap-maps-mcp-server"
       ],
       "env": {
-        "AMAP_MAPS_API_KEY": "sk-1287df1e0e73482e8cc64590f909e41f"
+        "AMAP_MAPS_API_KEY": "你的高德地图API密钥"
       }
     },
     "sakura-image-search-mcp-server": {
