@@ -6,5 +6,5 @@ package com.yupi.yuaiagent.archived.demo.invoke;
 public interface TestApiKey {
 
     // 修改为你的 API Key
-    String API_KEY = "sk-1287df1e0e73482e8cc64590f909e41f";
+    String API_KEY = "你的DashScope密钥";
 }
